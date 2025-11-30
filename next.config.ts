@@ -33,10 +33,10 @@ const nextConfig: NextConfig = {
             key: 'Content-Security-Policy',
             value: [
               "default-src 'self'",
-              // Next.js requires 'unsafe-eval' for development HMR and 'wasm-unsafe-eval' for production
+              // Next.js requires 'unsafe-eval' for development HMR, 'unsafe-inline' and 'wasm-unsafe-eval' for production
               isDev
                 ? "script-src 'self' 'unsafe-eval' 'unsafe-inline'"
-                : "script-src 'self' 'wasm-unsafe-eval'",
+                : "script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval'",
               // Tailwind CSS requires 'unsafe-inline' for styles
               "style-src 'self' 'unsafe-inline'",
               "img-src 'self' data: blob:",
