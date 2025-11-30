@@ -30,7 +30,8 @@ export default function NumberDrawer({
     // Audio Context initialisieren
     const initAudio = useCallback(() => {
         if (!audioCtxRef.current) {
-            audioCtxRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
+            const AudioContextClass = window.AudioContext || (window as typeof window & { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+            audioCtxRef.current = new AudioContextClass();
         }
     }, []);
 
@@ -81,7 +82,7 @@ export default function NumberDrawer({
             // Just-drawn Animation entfernen
             setTimeout(() => setJustDrawn(null), 500);
         }, 300);
-    }, [drawnNumbers, isAnimating, initAudio, playSound]);
+    }, [drawnNumbers, isAnimating, initAudio, playSound, setCurrentNumber, setDrawnNumbers]);
 
     // Reset mit Bestätigung
     const reset = useCallback(() => {
@@ -94,7 +95,7 @@ export default function NumberDrawer({
         setCurrentNumber(null);
         setIsAnimating(false);
         setJustDrawn(null);
-    }, [drawnNumbers.length, t.confirmRestart]);
+    }, [drawnNumbers.length, t.confirmRestart, setDrawnNumbers, setCurrentNumber]);
 
     // Tastatursteuerung
     useEffect(() => {
@@ -113,7 +114,7 @@ export default function NumberDrawer({
 
         window.addEventListener('keydown', handleKeyDown);
         return () => window.removeEventListener('keydown', handleKeyDown);
-    }, [drawNumber, reset]);
+    }, [drawNumber, reset, setSoundEnabled]);
 
     const isNumberDrawn = (num: number) => drawnNumbers.includes(num);
     const remainingNumbers = TOTAL_NUMBERS - drawnNumbers.length;

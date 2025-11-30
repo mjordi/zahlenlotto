@@ -1,6 +1,6 @@
 'use client';
 
-import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import { createContext, useContext, useState, ReactNode } from 'react';
 import { Language, getTranslations, Translations } from '@/utils/translations';
 
 interface LanguageContextType {
@@ -12,29 +12,23 @@ interface LanguageContextType {
 const LanguageContext = createContext<LanguageContextType | undefined>(undefined);
 
 export function LanguageProvider({ children }: { children: ReactNode }) {
-    const [language, setLanguageState] = useState<Language>('de');
-    const [mounted, setMounted] = useState(false);
-
-    // Load language from localStorage on mount
-    useEffect(() => {
+    const [language, setLanguageState] = useState<Language>(() => {
+        if (typeof window === 'undefined') return 'de';
         const savedLanguage = localStorage.getItem('language') as Language;
         if (savedLanguage && ['de', 'en', 'fr', 'it'].includes(savedLanguage)) {
-            setLanguageState(savedLanguage);
+            return savedLanguage;
         }
-        setMounted(true);
-    }, []);
+        return 'de';
+    });
 
     const setLanguage = (lang: Language) => {
         setLanguageState(lang);
-        localStorage.setItem('language', lang);
+        if (typeof window !== 'undefined') {
+            localStorage.setItem('language', lang);
+        }
     };
 
     const t = getTranslations(language);
-
-    // Prevent hydration mismatch
-    if (!mounted) {
-        return null;
-    }
 
     return (
         <LanguageContext.Provider value={{ language, setLanguage, t }}>
