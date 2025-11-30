@@ -22,7 +22,7 @@ Zahlenlotto is a Next.js-based lottery card generator that creates traditional 9
 - ✅ Lint passes (`npm run lint`)
 - ✅ New tests are written for new functionality
 - ✅ The build succeeds (`npm run build`)
-- ✅ Documentation is updated (if necessary)
+- ✅ Documentation is updated (if necessary) (`README.md` and `AGENTS.md`)
 
 **Never mark a task as done without running and passing all tests.**
 
