@@ -43,15 +43,13 @@ jobs:
         run: npm run build
         continue-on-error: true
 
-      - name: Auto-merge for minor and patch updates
+      - name: Merge minor and patch updates
         if: |
           steps.test.outcome == 'success' &&
           steps.build.outcome == 'success' &&
           (steps.metadata.outputs.update-type == 'version-update:semver-minor' ||
            steps.metadata.outputs.update-type == 'version-update:semver-patch')
-        run: |
-          gh pr review --approve "$PR_URL"
-          gh pr merge --auto --squash "$PR_URL"
+        run: gh pr merge --squash --delete-branch "$PR_URL"
         env:
           PR_URL: ${{ github.event.pull_request.html_url }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
