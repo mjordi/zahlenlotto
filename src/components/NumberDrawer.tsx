@@ -2,8 +2,7 @@
 
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { useLanguage } from '@/contexts/LanguageContext';
-
-const TOTAL_NUMBERS = 90;
+import { TOTAL_NUMBERS } from '@/utils/lotto';
 
 interface NumberDrawerProps {
     drawnNumbers: number[];

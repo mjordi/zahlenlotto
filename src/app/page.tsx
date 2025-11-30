@@ -2,7 +2,7 @@
 
 import { useState, lazy, Suspense } from 'react';
 import { useLanguage } from '@/contexts/LanguageContext';
-import { Language } from '@/utils/translations';
+import { Language, SUPPORTED_LANGUAGES } from '@/utils/translations';
 
 // Lazy load heavy components to reduce initial bundle
 const NumberDrawer = lazy(() => import('@/components/NumberDrawer'));
@@ -18,12 +18,10 @@ export default function Home() {
     const [currentNumber, setCurrentNumber] = useState<number | null>(null);
     const [soundEnabled, setSoundEnabled] = useState(true);
 
-    const languages: { code: Language; label: string; flag: string }[] = [
-        { code: 'de', label: t.languageGerman, flag: '🇩🇪' },
-        { code: 'en', label: t.languageEnglish, flag: '🇬🇧' },
-        { code: 'fr', label: t.languageFrench, flag: '🇫🇷' },
-        { code: 'it', label: t.languageItalian, flag: '🇮🇹' },
-    ];
+    const languages = SUPPORTED_LANGUAGES.map(lang => ({
+        ...lang,
+        label: t[lang.labelKey]
+    }));
 
     return (
         <main className="min-h-screen p-4 md:p-8 pb-20">
@@ -78,8 +76,8 @@ export default function Home() {
                         <button
                             onClick={() => setActiveTab('draw')}
                             className={`px-8 py-3 rounded-xl font-semibold transition-all duration-300 ${activeTab === 'draw'
-                                    ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/25'
-                                    : 'text-slate-400 hover:text-white hover:bg-white/5'
+                                ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/25'
+                                : 'text-slate-400 hover:text-white hover:bg-white/5'
                                 }`}
                         >
                             {t.tabDrawNumbers}
@@ -87,8 +85,8 @@ export default function Home() {
                         <button
                             onClick={() => setActiveTab('generate')}
                             className={`px-8 py-3 rounded-xl font-semibold transition-all duration-300 ${activeTab === 'generate'
-                                    ? 'bg-amber-500 text-white shadow-lg shadow-amber-500/25'
-                                    : 'text-slate-400 hover:text-white hover:bg-white/5'
+                                ? 'bg-amber-500 text-white shadow-lg shadow-amber-500/25'
+                                : 'text-slate-400 hover:text-white hover:bg-white/5'
                                 }`}
                         >
                             {t.tabGenerateCards}

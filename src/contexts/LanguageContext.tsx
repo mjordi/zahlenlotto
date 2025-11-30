@@ -14,10 +14,20 @@ const LanguageContext = createContext<LanguageContextType | undefined>(undefined
 export function LanguageProvider({ children }: { children: ReactNode }) {
     const [language, setLanguageState] = useState<Language>(() => {
         if (typeof window === 'undefined') return 'de';
+
+        // 1. Check localStorage
         const savedLanguage = localStorage.getItem('language') as Language;
         if (savedLanguage && ['de', 'en', 'fr', 'it'].includes(savedLanguage)) {
             return savedLanguage;
         }
+
+        // 2. Check browser language
+        const browserLang = navigator.language.split('-')[0];
+        if (['de', 'en', 'fr', 'it'].includes(browserLang)) {
+            return browserLang as Language;
+        }
+
+        // 3. Default
         return 'de';
     });
 

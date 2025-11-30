@@ -1,5 +1,12 @@
 export type Language = 'de' | 'en' | 'fr' | 'it';
 
+export const SUPPORTED_LANGUAGES: { code: Language; labelKey: keyof Translations; flag: string }[] = [
+    { code: 'de', labelKey: 'languageGerman', flag: '🇩🇪' },
+    { code: 'en', labelKey: 'languageEnglish', flag: '🇬🇧' },
+    { code: 'fr', labelKey: 'languageFrench', flag: '🇫🇷' },
+    { code: 'it', labelKey: 'languageItalian', flag: '🇮🇹' },
+];
+
 export interface Translations {
     // Header
     appTitle: string;
