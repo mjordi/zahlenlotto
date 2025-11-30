@@ -1,109 +1,36 @@
-# Zahlenlotto
+This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
 
-Eine moderne Web-Applikation für das Zahlenlotto-Spiel, erstellt mit Next.js 14, TypeScript und Tailwind CSS.
+## Getting Started
 
-## Features
-
-### 🎲 Zahlen Ziehen
-- Zufälliges Ziehen von Zahlen (1-75)
-- Visuelle Anzeige aller gezogenen und verbleibenden Zahlen
-- Verlauf der gezogenen Zahlen
-- Zurücksetzen-Funktion für neue Runden
-
-### 🎫 Karten-Generator
-- Generierung beliebig vieler Zahlenlotto-Karten
-- Einstellbare Anzahl Karten pro A4 Seite (2, 4 oder 6 Karten)
-- Live-Vorschau der generierten Karten
-- PDF-Export für einfaches Drucken
-- Jede Karte enthält 25 zufällige, sortierte Zahlen
-
-## Technologie-Stack
-
-- **Framework:** Next.js 14 (App Router)
-- **Sprache:** TypeScript
-- **Styling:** Tailwind CSS
-- **PDF-Generierung:** jsPDF
-- **Hosting:** Vercel
-
-## Performance & Web Vitals
-
-Die Applikation ist optimiert für exzellente Google Web Vitals:
-
-- ✅ Server-Side Rendering (SSR) für schnelle Ladezeiten
-- ✅ Optimierte Fonts und Assets
-- ✅ Minimales JavaScript-Bundle
-- ✅ Responsive Design für alle Geräte
-- ✅ Kompression und Caching-Strategien
-
-## Installation
+First, run the development server:
 
 ```bash
-# Dependencies installieren
-npm install
-
-# Development Server starten
 npm run dev
-
-# Production Build erstellen
-npm run build
-
-# Production Server starten
-npm start
+# or
+yarn dev
+# or
+pnpm dev
+# or
+bun dev
 ```
 
-Öffnen Sie [http://localhost:3000](http://localhost:3000) in Ihrem Browser.
+Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
 
-## Deployment auf Vercel
+You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
 
-1. Repository auf GitHub pushen
-2. In Vercel importieren
-3. Automatisches Deployment läuft
+This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
 
-[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new)
+## Learn More
 
-## Verwendung
+To learn more about Next.js, take a look at the following resources:
 
-### Spiel-Modus
-1. Klicken Sie auf "Zahl ziehen", um eine zufällige Zahl zu erhalten
-2. Die gezogene Zahl wird auf der Zahlentafel markiert
-3. Der Verlauf zeigt alle bisher gezogenen Zahlen
-4. "Zurücksetzen" startet ein neues Spiel
+- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
+- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
 
-### Karten-Generator
-1. Wählen Sie die gewünschte Anzahl Karten
-2. Wählen Sie, wie viele Karten pro A4 Seite erscheinen sollen
-3. Klicken Sie auf "Karten generieren"
-4. Laden Sie die generierten Karten als PDF herunter
+You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
 
-## Projektstruktur
+## Deploy on Vercel
 
-```
-zahlenlotto/
-├── app/
-│   ├── layout.tsx          # Root Layout mit Metadaten
-│   ├── page.tsx            # Hauptseite mit Tab-Navigation
-│   └── globals.css         # Globale Styles
-├── components/
-│   ├── NumberDrawer.tsx    # Zahlenzieh-Komponente
-│   ├── CardGenerator.tsx   # Karten-Generator
-│   └── LottoCard.tsx       # Einzelne Karte
-├── public/                 # Statische Assets
-├── next.config.ts          # Next.js Konfiguration
-├── vercel.json            # Vercel Deployment-Config
-└── package.json
-```
+The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
 
-## Browser-Kompatibilität
-
-- ✅ Chrome/Edge (neueste Versionen)
-- ✅ Firefox (neueste Versionen)
-- ✅ Safari (neueste Versionen)
-- ✅ Mobile Browser
-
-## Lizenz
-
-MIT
-
-## Entwickelt mit ❤️
-
-Erstellt mit Next.js und optimiert für beste Performance auf Vercel.
+Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
