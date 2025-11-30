@@ -4,91 +4,11 @@ import { useState, useCallback, useRef } from 'react';
 import LottoCard from './LottoCard';
 import { jsPDF } from 'jspdf';
 import { useLanguage } from '@/contexts/LanguageContext';
+import { generateLottoCard, COLUMN_LABELS, LottoCard as LottoCardType } from '@/utils/lotto';
 
 interface Card {
     id: number;
-    grid: (number | null)[][];  // 3 Reihen × 9 Spalten
-}
-
-// Zahlen-Bereiche pro Spalte
-const COLUMN_RANGES = [
-    Array.from({ length: 9 }, (_, i) => i + 1),      // Spalte 0: 1-9
-    Array.from({ length: 10 }, (_, i) => i + 10),    // Spalte 1: 10-19
-    Array.from({ length: 10 }, (_, i) => i + 20),    // Spalte 2: 20-29
-    Array.from({ length: 10 }, (_, i) => i + 30),    // Spalte 3: 30-39
-    Array.from({ length: 10 }, (_, i) => i + 40),    // Spalte 4: 40-49
-    Array.from({ length: 10 }, (_, i) => i + 50),    // Spalte 5: 50-59
-    Array.from({ length: 10 }, (_, i) => i + 60),    // Spalte 6: 60-69
-    Array.from({ length: 10 }, (_, i) => i + 70),    // Spalte 7: 70-79
-    Array.from({ length: 11 }, (_, i) => i + 80),    // Spalte 8: 80-90
-];
-
-const COLUMN_LABELS = ['1-9', '10-19', '20-29', '30-39', '40-49', '50-59', '60-69', '70-79', '80-90'];
-
-// Fisher-Yates Shuffle Algorithmus (entspricht Python's random.sample)
-function shuffleArray<T>(array: T[]): T[] {
-    const shuffled = [...array];
-    for (let i = shuffled.length - 1; i > 0; i--) {
-        const j = Math.floor(Math.random() * (i + 1));
-        [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
-    }
-    return shuffled;
-}
-
-function generateLottoCard(): (number | null)[][] {
-    // Initialisiere 3×9 Grid mit null
-    const card: (number | null)[][] = Array(3).fill(null).map(() => Array(9).fill(null));
-
-    // Für jede Reihe genau 5 zufällige Spalten auswählen
-    for (let row = 0; row < 3; row++) {
-        // Wähle 5 zufällige Spalten für diese Reihe (entspricht Python's random.sample)
-        const allColumns = Array.from({ length: 9 }, (_, i) => i);
-        const selectedColumns = shuffleArray(allColumns).slice(0, 5);
-
-        for (const col of selectedColumns) {
-            // Finde verfügbare Zahlen für diese Spalte (nicht bereits in anderen Reihen verwendet)
-            const usedInColumn = card
-                .map(r => r[col])
-                .filter(n => n !== null) as number[];
-
-            const available = COLUMN_RANGES[col].filter(n => !usedInColumn.includes(n));
-
-            if (available.length > 0) {
-                // Wähle zufällige Zahl aus verfügbaren
-                const randomNumber = available[Math.floor(Math.random() * available.length)];
-                card[row][col] = randomNumber;
-            }
-        }
-    }
-
-    // Sortiere Zahlen in jeder Spalte (kleinste oben)
-    for (let col = 0; col < 9; col++) {
-        // Sammle alle Zahlen in dieser Spalte mit ihren Reihen-Indizes
-        const columnValues: { row: number; value: number }[] = [];
-        for (let row = 0; row < 3; row++) {
-            if (card[row][col] !== null) {
-                columnValues.push({ row, value: card[row][col]! });
-            }
-        }
-
-        // Sortiere nach Wert
-        columnValues.sort((a, b) => a.value - b.value);
-
-        // Sammle die ursprünglichen Reihen-Positionen (sortiert)
-        const originalRows = columnValues.map(cv => cv.row).sort((a, b) => a - b);
-
-        // Leere die Spalte
-        for (let row = 0; row < 3; row++) {
-            card[row][col] = null;
-        }
-
-        // Fülle sortiert wieder ein
-        for (let i = 0; i < columnValues.length; i++) {
-            card[originalRows[i]][col] = columnValues[i].value;
-        }
-    }
-
-    return card;
+    grid: LottoCardType;
 }
 
 export default function CardGenerator() {

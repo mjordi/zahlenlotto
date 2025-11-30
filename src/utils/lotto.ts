@@ -1,5 +1,7 @@
 export const TOTAL_NUMBERS = 90;
 
+export const COLUMN_LABELS = ['1-9', '10-19', '20-29', '30-39', '40-49', '50-59', '60-69', '70-79', '80-90'];
+
 export type LottoCard = (number | null)[][];
 
 /**
