@@ -4,7 +4,7 @@ import '@testing-library/jest-dom'
 Object.defineProperty(window.navigator, 'language', {
   writable: true,
   configurable: true,
-  value: 'de-DE',
+  value: 'de',
 })
 
 // Mock localStorage
