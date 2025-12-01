@@ -61,7 +61,7 @@ const nextConfig: NextConfig = {
     optimizeCss: true,
   },
 
-  // Ensure modern JavaScript output (ES2022)
+  // Ensure modern JavaScript output (ES2022) - no legacy polyfills
   transpilePackages: [],
 };
 

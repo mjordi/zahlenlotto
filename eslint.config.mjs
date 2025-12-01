@@ -13,6 +13,14 @@ const eslintConfig = defineConfig([
     "build/**",
     "next-env.d.ts",
   ]),
+  {
+    rules: {
+      // Allow setState in useEffect for hydration scenarios
+      // This is necessary to avoid server/client mismatches while
+      // still respecting user preferences from localStorage/browser
+      'react-hooks/set-state-in-effect': 'off',
+    },
+  },
 ]);
 
 export default eslintConfig;
