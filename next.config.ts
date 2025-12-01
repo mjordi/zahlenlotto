@@ -57,6 +57,8 @@ const nextConfig: NextConfig = {
   // Experimental features for better performance
   experimental: {
     optimizePackageImports: ['react', 'react-dom'],
+    // Inline critical CSS to reduce render-blocking requests
+    optimizeCss: true,
   },
 
   // Ensure modern JavaScript output (ES2022)
