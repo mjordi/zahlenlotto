@@ -2,7 +2,7 @@
 
 import { useState, lazy, Suspense } from 'react';
 import { useLanguage } from '@/contexts/LanguageContext';
-import { Language, SUPPORTED_LANGUAGES } from '@/utils/translations';
+import { SUPPORTED_LANGUAGES } from '@/utils/translations';
 
 // Lazy load heavy components to reduce initial bundle
 const NumberDrawer = lazy(() => import('@/components/NumberDrawer'));

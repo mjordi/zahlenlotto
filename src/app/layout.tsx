@@ -7,6 +7,10 @@ export const metadata: Metadata = {
     description: "Premium Number Drawing & Card Generation for lottery games",
     keywords: ["lotto", "lottery", "number drawing", "card generation"],
     authors: [{ name: "Zahlenlotto" }],
+    // Performance optimizations
+    other: {
+        'color-scheme': 'dark',
+    },
 };
 
 export const viewport: Viewport = {

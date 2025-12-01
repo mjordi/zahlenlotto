@@ -3,7 +3,11 @@
   "version": "0.1.0",
   "private": true,
   "browserslist": [
-    "defaults and supports es6-module"
+    "chrome >= 94",
+    "edge >= 94",
+    "firefox >= 90",
+    "safari >= 15",
+    "ios >= 15"
   ],
   "scripts": {
     "dev": "next dev",
