@@ -60,9 +60,9 @@ export default function CardGenerator() {
                         <input
                             type="number"
                             min="1"
-                            max="100"
+                            max="99"
                             value={totalCards}
-                            onChange={(e) => setTotalCards(Math.max(1, parseInt(e.target.value) || 1))}
+                            onChange={(e) => setTotalCards(Math.min(99, Math.max(1, parseInt(e.target.value) || 1)))}
                             className="input-field w-full"
                         />
                         <p className="text-xs text-slate-500 mt-1">
