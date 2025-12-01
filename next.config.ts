@@ -24,6 +24,10 @@ const nextConfig: NextConfig = {
   // Content Security Policy
   async headers() {
     const isDev = process.env.NODE_ENV === 'development';
+    const isPreview = process.env.VERCEL_ENV === 'preview';
+
+    // Vercel Live feedback is available in preview environments
+    const allowVercelLive = isDev || isPreview;
 
     return [
       {
@@ -34,15 +38,17 @@ const nextConfig: NextConfig = {
             value: [
               "default-src 'self'",
               // Next.js requires 'unsafe-eval' for development HMR, 'unsafe-inline' and 'wasm-unsafe-eval' for production
+              // Vercel Live needs vercel.live for preview environments
               isDev
                 ? "script-src 'self' 'unsafe-eval' 'unsafe-inline'"
-                : "script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval'",
+                : `script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval'${allowVercelLive ? ' https://vercel.live' : ''}`,
               // Tailwind CSS requires 'unsafe-inline' for styles
-              "style-src 'self' 'unsafe-inline'",
+              `style-src 'self' 'unsafe-inline'${allowVercelLive ? ' https://vercel.live' : ''}`,
               "img-src 'self' data: blob:",
               "font-src 'self' data:",
-              "connect-src 'self'" + (isDev ? " ws: wss:" : ""),
-              "frame-src 'none'",
+              `connect-src 'self'${isDev ? ' ws: wss:' : ''}${allowVercelLive ? ' https://vercel.live wss://ws-us3.pusher.com' : ''}`,
+              // Vercel Live needs to embed feedback iframe
+              allowVercelLive ? "frame-src https://vercel.live" : "frame-src 'none'",
               "object-src 'none'",
               "base-uri 'self'",
               "form-action 'self'",
