@@ -6,8 +6,8 @@
     "chrome >= 94",
     "edge >= 94",
     "firefox >= 90",
-    "safari >= 15",
-    "ios >= 15"
+    "safari >= 15.4",
+    "ios >= 15.4"
   ],
   "scripts": {
     "dev": "next dev",
