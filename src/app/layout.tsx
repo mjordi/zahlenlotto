@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import { LanguageProvider } from '@/contexts/LanguageContext';
+import { ThemeProvider } from '@/contexts/ThemeContext';
 
 export const metadata: Metadata = {
     title: "Zahlenlotto - Number Drawing & Card Generation",
@@ -9,7 +10,7 @@ export const metadata: Metadata = {
     authors: [{ name: "Zahlenlotto" }],
     // Performance optimizations
     other: {
-        'color-scheme': 'dark',
+        'color-scheme': 'dark light',
     },
 };
 
@@ -28,9 +29,11 @@ export default function RootLayout({
     return (
         <html lang="de">
             <body className="antialiased">
-                <LanguageProvider>
-                    {children}
-                </LanguageProvider>
+                <ThemeProvider>
+                    <LanguageProvider>
+                        {children}
+                    </LanguageProvider>
+                </ThemeProvider>
             </body>
         </html>
     );

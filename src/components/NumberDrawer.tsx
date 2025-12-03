@@ -297,7 +297,7 @@ export default function NumberDrawer({
                 </div>
 
                 {/* Ziehungszähler */}
-                <div className="text-slate-400 mt-4 font-medium">
+                <div className="mt-4 font-medium" style={{ color: 'var(--text-muted)' }}>
                     {drawnNumbers.length === 0
                         ? t.noNumberDrawn
                         : drawnNumbers.length === TOTAL_NUMBERS
@@ -324,9 +324,9 @@ export default function NumberDrawer({
                 </div>
 
                 {/* Tastatur-Hinweis & Sound */}
-                <div className="flex items-center justify-center gap-4 text-xs mt-6 border-t border-white/5 pt-4">
-                    <div className="text-slate-500 leading-loose">
-                        {t.keyboardHint} <kbd className="px-1.5 py-0.5 bg-slate-800 rounded border border-white/10 text-slate-300 font-sans inline-block my-1">{t.keySpace}</kbd> {t.keyDraw} | <kbd className="px-1.5 py-0.5 bg-slate-800 rounded border border-white/10 text-slate-300 font-sans inline-block my-1">{t.keyEnter}</kbd> {t.keyDraw} | <kbd className="px-1.5 py-0.5 bg-slate-800 rounded border border-white/10 text-slate-300 font-sans inline-block my-1">{t.keyR}</kbd> {t.keyReset} | <kbd className="px-1.5 py-0.5 bg-slate-800 rounded border border-white/10 text-slate-300 font-sans inline-block my-1">M</kbd> {t.muteToggle}
+                <div className="flex items-center justify-center gap-4 text-xs mt-6 pt-4" style={{ borderTop: `1px solid var(--glass-border)` }}>
+                    <div className="leading-loose" style={{ color: 'var(--text-muted)' }}>
+                        {t.keyboardHint} <kbd className="px-1.5 py-0.5 rounded border font-sans inline-block my-1" style={{ background: 'var(--btn-secondary-bg)', borderColor: 'var(--glass-border)', color: 'var(--text-secondary)' }}>{t.keySpace}</kbd> {t.keyDraw} | <kbd className="px-1.5 py-0.5 rounded border font-sans inline-block my-1" style={{ background: 'var(--btn-secondary-bg)', borderColor: 'var(--glass-border)', color: 'var(--text-secondary)' }}>{t.keyEnter}</kbd> {t.keyDraw} | <kbd className="px-1.5 py-0.5 rounded border font-sans inline-block my-1" style={{ background: 'var(--btn-secondary-bg)', borderColor: 'var(--glass-border)', color: 'var(--text-secondary)' }}>{t.keyR}</kbd> {t.keyReset} | <kbd className="px-1.5 py-0.5 rounded border font-sans inline-block my-1" style={{ background: 'var(--btn-secondary-bg)', borderColor: 'var(--glass-border)', color: 'var(--text-secondary)' }}>M</kbd> {t.muteToggle}
                     </div>
                 </div>
             </div>
@@ -353,10 +353,15 @@ export default function NumberDrawer({
                       transition-all duration-500 border
                       ${drawn
                                             ? 'bg-gradient-to-br from-emerald-500 to-emerald-700 text-white border-emerald-400/50 shadow-lg shadow-emerald-500/20 scale-105'
-                                            : 'bg-slate-800/30 text-slate-600 border-white/5'
+                                            : 'border'
                                         }
                       ${isJustDrawn ? 'animate-bounce scale-125 z-10' : ''}
                     `}
+                                    style={!drawn ? {
+                                        background: 'var(--lotto-cell-empty)',
+                                        color: 'var(--text-muted)',
+                                        borderColor: 'var(--glass-border)'
+                                    } : {}}
                                 >
                                     {num}
                                 </div>
@@ -365,14 +370,14 @@ export default function NumberDrawer({
                     </div>
 
                     {/* Statistik */}
-                    <div className="flex justify-center gap-12 flex-wrap border-t border-white/5 pt-6">
+                    <div className="flex justify-center gap-12 flex-wrap pt-6" style={{ borderTop: `1px solid var(--glass-border)` }}>
                         <div className="text-center">
-                            <div className="text-3xl font-bold text-blue-400">{drawnNumbers.length}</div>
-                            <div className="text-slate-500 text-sm uppercase tracking-wider font-medium">{t.drawn}</div>
+                            <div className="text-3xl font-bold text-blue-500">{drawnNumbers.length}</div>
+                            <div className="text-sm uppercase tracking-wider font-medium" style={{ color: 'var(--text-muted)' }}>{t.drawn}</div>
                         </div>
                         <div className="text-center">
-                            <div className="text-3xl font-bold text-slate-400">{remainingNumbers}</div>
-                            <div className="text-slate-500 text-sm uppercase tracking-wider font-medium">{t.remaining}</div>
+                            <div className="text-3xl font-bold" style={{ color: 'var(--text-secondary)' }}>{remainingNumbers}</div>
+                            <div className="text-sm uppercase tracking-wider font-medium" style={{ color: 'var(--text-muted)' }}>{t.remaining}</div>
                         </div>
                     </div>
                 </div>
@@ -384,25 +389,25 @@ export default function NumberDrawer({
                             <h2 className="text-center text-2xl font-bold mb-6 bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-amber-400">
                                 {t.playingCards}
                             </h2>
-                            <div className="text-center text-sm text-slate-400 mb-4">
+                            <div className="text-center text-sm mb-4" style={{ color: 'var(--text-muted)' }}>
                                 {generatedCards.length} {generatedCards.length === 1 ? t.card : t.cards}
                             </div>
 
                             {/* PDF Export Controls */}
                             <div className="mb-4 flex gap-3 items-center justify-center">
                                 <div className="flex items-center gap-2">
-                                    <label className="text-xs font-medium text-slate-400">
+                                    <label className="text-xs font-medium" style={{ color: 'var(--text-muted)' }}>
                                         {t.cardsPerPage}:
                                     </label>
                                     <select
                                         value={cardsPerPage}
                                         onChange={(e) => setCardsPerPage(parseInt(e.target.value))}
-                                        className="input-field text-sm py-1 px-2 bg-slate-800 border-white/10"
+                                        className="input-field text-sm py-1 px-2"
                                     >
-                                        <option value="2" className="bg-slate-800">2</option>
-                                        <option value="3" className="bg-slate-800">3</option>
-                                        <option value="4" className="bg-slate-800">4</option>
-                                        <option value="5" className="bg-slate-800">5</option>
+                                        <option value="2">2</option>
+                                        <option value="3">3</option>
+                                        <option value="4">4</option>
+                                        <option value="5">5</option>
                                     </select>
                                 </div>
                                 <button
@@ -436,7 +441,7 @@ export default function NumberDrawer({
                                 <div className="w-full max-w-sm space-y-4">
                                 <div className="grid grid-cols-2 gap-3">
                                     <div>
-                                        <label className="block text-sm font-medium text-slate-300 mb-2">
+                                        <label className="block text-sm font-medium mb-2" style={{ color: 'var(--text-secondary)' }}>
                                             {t.numberOfPlayers}
                                         </label>
                                         <input
@@ -449,7 +454,7 @@ export default function NumberDrawer({
                                         />
                                     </div>
                                     <div>
-                                        <label className="block text-sm font-medium text-slate-300 mb-2">
+                                        <label className="block text-sm font-medium mb-2" style={{ color: 'var(--text-secondary)' }}>
                                             {t.cardsPerPlayer}
                                         </label>
                                         <input
@@ -465,7 +470,7 @@ export default function NumberDrawer({
                                 <div className="space-y-2 max-h-[350px] overflow-y-auto">
                                     {Array.from({ length: numberOfPlayers }, (_, i) => (
                                         <div key={i}>
-                                            <label className="block text-xs font-medium text-slate-400 mb-1">
+                                            <label className="block text-xs font-medium mb-1" style={{ color: 'var(--text-muted)' }}>
                                                 {t.playerLabel} {i + 1}
                                             </label>
                                             <input
@@ -503,7 +508,7 @@ export default function NumberDrawer({
                 </h2>
                 <div className="flex flex-wrap gap-3 justify-center min-h-[50px] items-center">
                     {drawnNumbers.length === 0 ? (
-                        <span className="text-slate-600 italic">{t.noNumbersDrawn}</span>
+                        <span className="italic" style={{ color: 'var(--text-muted)' }}>{t.noNumbersDrawn}</span>
                     ) : (
                         drawnNumbers.map((num, idx) => (
                             <div

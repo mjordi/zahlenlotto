@@ -49,6 +49,7 @@ export interface Translations {
     pdfSubtitle: string;
     pdfPageOf: string;
     pdfInstructions: string;
+    pdfFilename: string;
 
     // Keyboard shortcuts
     keyboardHint: string;
@@ -82,6 +83,11 @@ export interface Translations {
     numberOfPlayers: string;
     cardsPerPlayer: string;
     playerLabel: string;
+
+    // Theme
+    themeAuto: string;
+    themeLight: string;
+    themeDark: string;
 }
 
 export const translations: Record<Language, Translations> = {
@@ -127,6 +133,7 @@ export const translations: Record<Language, Translations> = {
         pdfSubtitle: 'Zahlen 1-90 • 5 Zahlen pro Reihe',
         pdfPageOf: 'von',
         pdfInstructions: "Spielanleitung: Decke die gezogenen Zahlen ab. Wer zuerst eine Reihe voll hat, ruft 'LOTTO!'",
+        pdfFilename: 'zahlenlotto_karten',
 
         // Keyboard shortcuts
         keyboardHint: 'Tastatur:',
@@ -160,6 +167,11 @@ export const translations: Record<Language, Translations> = {
         numberOfPlayers: 'Anzahl Spieler',
         cardsPerPlayer: 'Karten pro Spieler',
         playerLabel: 'Spieler',
+
+        // Theme
+        themeAuto: 'Automatisch',
+        themeLight: 'Hell',
+        themeDark: 'Dunkel',
     },
 
     en: {
@@ -204,6 +216,7 @@ export const translations: Record<Language, Translations> = {
         pdfSubtitle: 'Numbers 1-90 • 5 numbers per row',
         pdfPageOf: 'of',
         pdfInstructions: "Game rules: Cover the drawn numbers. First to complete a row shouts 'LOTTO!'",
+        pdfFilename: 'number_lotto_cards',
 
         // Keyboard shortcuts
         keyboardHint: 'Keyboard:',
@@ -237,6 +250,11 @@ export const translations: Record<Language, Translations> = {
         numberOfPlayers: 'Number of Players',
         cardsPerPlayer: 'Cards per Player',
         playerLabel: 'Player',
+
+        // Theme
+        themeAuto: 'Automatic',
+        themeLight: 'Light',
+        themeDark: 'Dark',
     },
 
     fr: {
@@ -281,6 +299,7 @@ export const translations: Record<Language, Translations> = {
         pdfSubtitle: 'Numéros 1-90 • 5 numéros par ligne',
         pdfPageOf: 'de',
         pdfInstructions: "Règles du jeu: Couvrez les numéros tirés. Le premier à compléter une ligne crie 'LOTO!'",
+        pdfFilename: 'loto_numerique_cartes',
 
         // Keyboard shortcuts
         keyboardHint: 'Clavier:',
@@ -314,6 +333,11 @@ export const translations: Record<Language, Translations> = {
         numberOfPlayers: 'Nombre de Joueurs',
         cardsPerPlayer: 'Cartes par Joueur',
         playerLabel: 'Joueur',
+
+        // Theme
+        themeAuto: 'Automatique',
+        themeLight: 'Clair',
+        themeDark: 'Sombre',
     },
 
     it: {
@@ -358,6 +382,7 @@ export const translations: Record<Language, Translations> = {
         pdfSubtitle: 'Numeri 1-90 • 5 numeri per riga',
         pdfPageOf: 'di',
         pdfInstructions: "Regole del gioco: Copri i numeri estratti. Il primo a completare una riga grida 'TOMBOLA!'",
+        pdfFilename: 'lotto_numerico_cartelle',
 
         // Keyboard shortcuts
         keyboardHint: 'Tastiera:',
@@ -391,6 +416,11 @@ export const translations: Record<Language, Translations> = {
         numberOfPlayers: 'Numero di Giocatori',
         cardsPerPlayer: 'Cartelle per Giocatore',
         playerLabel: 'Giocatore',
+
+        // Theme
+        themeAuto: 'Automatico',
+        themeLight: 'Chiaro',
+        themeDark: 'Scuro',
     },
 };
 

@@ -1,6 +1,8 @@
 @import "tailwindcss";
 
-:root {
+/* Dark mode (default) */
+:root,
+[data-theme="dark"] {
   --background: #0f172a;
   --foreground: #f8fafc;
   --primary: #3b82f6;
@@ -8,6 +10,43 @@
   --accent: #f59e0b;
   --card-bg: rgba(30, 41, 59, 0.7);
   --card-border: rgba(255, 255, 255, 0.1);
+  --glass-bg: rgba(30, 41, 59, 0.5);
+  --glass-border: rgba(255, 255, 255, 0.1);
+  --input-bg: rgba(15, 23, 42, 0.5);
+  --input-border: rgba(255, 255, 255, 0.1);
+  --text-muted: #94a3b8;
+  --text-secondary: #cbd5e1;
+  --btn-secondary-bg: #334155;
+  --btn-secondary-hover: #475569;
+  --lotto-cell-bg: #ffffff;
+  --lotto-cell-text: #0f172a;
+  --lotto-cell-empty: rgba(30, 41, 59, 0.5);
+  --lotto-card-bg: rgba(15, 23, 42, 0.5);
+  --lotto-card-border: rgba(255, 255, 255, 0.2);
+}
+
+/* Light mode */
+[data-theme="light"] {
+  --background: #ffffff;
+  --foreground: #0f172a;
+  --primary: #2563eb;
+  --primary-glow: rgba(37, 99, 235, 0.3);
+  --accent: #d97706;
+  --card-bg: rgba(248, 250, 252, 0.9);
+  --card-border: rgba(15, 23, 42, 0.15);
+  --glass-bg: rgba(248, 250, 252, 0.8);
+  --glass-border: rgba(15, 23, 42, 0.2);
+  --input-bg: rgba(255, 255, 255, 0.9);
+  --input-border: rgba(15, 23, 42, 0.2);
+  --text-muted: #64748b;
+  --text-secondary: #475569;
+  --btn-secondary-bg: #e2e8f0;
+  --btn-secondary-hover: #cbd5e1;
+  --lotto-cell-bg: #ffffff;
+  --lotto-cell-text: #0f172a;
+  --lotto-cell-empty: rgba(226, 232, 240, 0.7);
+  --lotto-card-bg: rgba(255, 255, 255, 0.9);
+  --lotto-card-border: rgba(15, 23, 42, 0.15);
 }
 
 * {
@@ -23,21 +62,38 @@ html {
 body {
   color: var(--foreground);
   background: var(--background);
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+  margin: 0;
+  padding: 0;
+  overflow-x: hidden;
+  transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+/* Dark mode background gradient */
+[data-theme="dark"] body {
   background-image:
     radial-gradient(at 0% 0%, rgba(59, 130, 246, 0.15) 0px, transparent 50%),
     radial-gradient(at 100% 0%, rgba(245, 158, 11, 0.1) 0px, transparent 50%),
     radial-gradient(at 100% 100%, rgba(59, 130, 246, 0.15) 0px, transparent 50%),
     radial-gradient(at 0% 100%, rgba(245, 158, 11, 0.1) 0px, transparent 50%);
   background-attachment: fixed;
-  font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
-  margin: 0;
-  padding: 0;
-  overflow-x: hidden;
+}
+
+/* Light mode background gradient */
+[data-theme="light"] body {
+  background-image:
+    radial-gradient(at 0% 0%, rgba(37, 99, 235, 0.08) 0px, transparent 50%),
+    radial-gradient(at 100% 0%, rgba(217, 119, 6, 0.06) 0px, transparent 50%),
+    radial-gradient(at 100% 100%, rgba(37, 99, 235, 0.08) 0px, transparent 50%),
+    radial-gradient(at 0% 100%, rgba(217, 119, 6, 0.06) 0px, transparent 50%);
+  background-attachment: fixed;
 }
 
 @layer components {
   .glass-panel {
-    @apply bg-slate-800/50 backdrop-blur-xl border border-white/10 rounded-2xl shadow-xl;
+    background: var(--glass-bg);
+    border: 1px solid var(--glass-border);
+    @apply backdrop-blur-xl rounded-2xl shadow-xl;
   }
 
   .btn-primary {
@@ -45,11 +101,21 @@ body {
   }
 
   .btn-secondary {
-    @apply px-6 py-3 bg-slate-700 hover:bg-slate-600 text-white font-semibold rounded-xl transition-all duration-300 border border-white/10 hover:border-white/20 active:scale-95;
+    background: var(--btn-secondary-bg);
+    border: 1px solid var(--glass-border);
+    color: var(--foreground);
+    @apply px-6 py-3 font-semibold rounded-xl transition-all duration-300 active:scale-95;
+  }
+
+  .btn-secondary:hover {
+    background: var(--btn-secondary-hover);
   }
 
   .input-field {
-    @apply bg-slate-900/50 border border-white/10 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500/50 text-white transition-all;
+    background: var(--input-bg);
+    border: 1px solid var(--input-border);
+    color: var(--foreground);
+    @apply rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500/50 transition-all;
   }
 }
 
