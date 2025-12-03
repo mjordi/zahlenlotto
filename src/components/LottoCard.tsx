@@ -8,9 +8,10 @@ interface LottoCardProps {
     compact?: boolean;
     drawnNumbers?: number[];
     playerName?: string;
+    newlyCompletedRows?: number[];
 }
 
-export default function LottoCard({ cardNumber, grid, compact, drawnNumbers = [], playerName }: LottoCardProps) {
+export default function LottoCard({ cardNumber, grid, compact, drawnNumbers = [], playerName, newlyCompletedRows = [] }: LottoCardProps) {
     const { t } = useLanguage();
     const completedRows = getCompletedRows(grid, drawnNumbers);
 
@@ -40,10 +41,11 @@ export default function LottoCard({ cardNumber, grid, compact, drawnNumbers = []
             >
                 {grid.map((row, rowIndex) => {
                     const isRowCompleted = completedRows.includes(rowIndex);
+                    const isNewlyCompleted = newlyCompletedRows.includes(rowIndex);
                     return (
                         <div
                             key={rowIndex}
-                            className={`grid grid-cols-9 ${isRowCompleted ? 'bg-gradient-to-r from-amber-500/40 via-amber-400/50 to-amber-500/40 animate-pulse' : ''}`}
+                            className={`grid grid-cols-9 ${isRowCompleted ? 'bg-gradient-to-r from-amber-500/40 via-amber-400/50 to-amber-500/40' : ''} ${isNewlyCompleted ? 'animate-pulse' : ''}`}
                         >
                             {row.map((num, colIndex) => {
                                 const drawn = isNumberDrawn(num);

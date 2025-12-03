@@ -5,7 +5,8 @@ import {
   TOTAL_NUMBERS,
   isRowComplete,
   getCompletedRows,
-  hasNewlyCompletedRow
+  hasNewlyCompletedRow,
+  getNewlyCompletedRows
 } from '../lotto';
 
 describe('lotto utilities', () => {
@@ -270,6 +271,70 @@ describe('lotto utilities', () => {
       const currentDrawn: number[] = [];
 
       expect(hasNewlyCompletedRow(card, previousDrawn, currentDrawn)).toBe(false);
+    });
+  });
+
+  describe('getNewlyCompletedRows', () => {
+    const card = [
+      [1, null, 23, null, 45, null, 67, null, 89],
+      [null, 12, null, 34, null, 56, 68, 78, null],
+      [5, null, 28, null, 48, null, 71, null, 90],
+    ];
+
+    it('should return newly completed row indices', () => {
+      const previousDrawn = [1, 23, 45, 67];
+      const currentDrawn = [1, 23, 45, 67, 89]; // Row 0 just completed
+
+      expect(getNewlyCompletedRows(card, previousDrawn, currentDrawn)).toEqual([0]);
+    });
+
+    it('should return empty array when no new rows are completed', () => {
+      const previousDrawn = [1, 23, 45];
+      const currentDrawn = [1, 23, 45, 67]; // Still not complete
+
+      expect(getNewlyCompletedRows(card, previousDrawn, currentDrawn)).toEqual([]);
+    });
+
+    it('should return empty array when row was already complete', () => {
+      const previousDrawn = [1, 23, 45, 67, 89]; // Row 0 already complete
+      const currentDrawn = [1, 23, 45, 67, 89, 12]; // Still complete, but no new completion
+
+      expect(getNewlyCompletedRows(card, previousDrawn, currentDrawn)).toEqual([]);
+    });
+
+    it('should return only the newly completed row when second row is completed', () => {
+      const previousDrawn = [1, 23, 45, 67, 89]; // Row 0 complete
+      const currentDrawn = [1, 23, 45, 67, 89, 12, 34, 56, 68, 78]; // Row 1 now complete
+
+      expect(getNewlyCompletedRows(card, previousDrawn, currentDrawn)).toEqual([1]);
+    });
+
+    it('should return multiple rows when multiple rows complete simultaneously', () => {
+      const previousDrawn = [1, 23, 45, 67];
+      const currentDrawn = [1, 23, 45, 67, 89, 12, 34, 56, 68, 78]; // Rows 0 and 1 complete
+
+      const result = getNewlyCompletedRows(card, previousDrawn, currentDrawn);
+      expect(result).toHaveLength(2);
+      expect(result).toContain(0);
+      expect(result).toContain(1);
+    });
+
+    it('should return empty array when no numbers are drawn', () => {
+      const previousDrawn: number[] = [];
+      const currentDrawn: number[] = [];
+
+      expect(getNewlyCompletedRows(card, previousDrawn, currentDrawn)).toEqual([]);
+    });
+
+    it('should return all three rows when all complete from empty state', () => {
+      const previousDrawn: number[] = [];
+      const currentDrawn = [1, 23, 45, 67, 89, 12, 34, 56, 68, 78, 5, 28, 48, 71, 90]; // All rows complete
+
+      const result = getNewlyCompletedRows(card, previousDrawn, currentDrawn);
+      expect(result).toHaveLength(3);
+      expect(result).toContain(0);
+      expect(result).toContain(1);
+      expect(result).toContain(2);
     });
   });
 });

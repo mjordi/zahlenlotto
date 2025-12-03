@@ -2,7 +2,7 @@
 
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { useLanguage } from '@/contexts/LanguageContext';
-import { TOTAL_NUMBERS, LottoCard as LottoCardType, hasNewlyCompletedRow, generateLottoCard } from '@/utils/lotto';
+import { TOTAL_NUMBERS, LottoCard as LottoCardType, getNewlyCompletedRows, generateLottoCard } from '@/utils/lotto';
 import LottoCard from './LottoCard';
 import confetti from 'canvas-confetti';
 import { generatePdf } from '@/utils/pdfGenerator';
@@ -50,6 +50,7 @@ export default function NumberDrawer({
     const [cardsPerPage, setCardsPerPage] = useState(3);
     const [isExporting, setIsExporting] = useState(false);
     const [celebratingPlayers, setCelebratingPlayers] = useState<string[]>([]);
+    const [newlyCompletedRowsByCard, setNewlyCompletedRowsByCard] = useState<Map<number, number[]>>(new Map());
 
     // Audio Context initialisieren
     const initAudio = useCallback(() => {
@@ -130,14 +131,22 @@ export default function NumberDrawer({
 
         const previousDrawn = previousDrawnRef.current;
         const playersWithNewCompletion: string[] = [];
+        const newCompletionsByCard = new Map<number, number[]>();
 
         for (const card of generatedCards) {
-            if (hasNewlyCompletedRow(card.grid, previousDrawn, newDrawnNumbers)) {
+            const newlyCompletedRows = getNewlyCompletedRows(card.grid, previousDrawn, newDrawnNumbers);
+
+            if (newlyCompletedRows.length > 0) {
+                newCompletionsByCard.set(card.id, newlyCompletedRows);
+
                 if (!playersWithNewCompletion.includes(card.playerName)) {
                     playersWithNewCompletion.push(card.playerName);
                 }
             }
         }
+
+        // Update state with newly completed rows
+        setNewlyCompletedRowsByCard(newCompletionsByCard);
 
         if (playersWithNewCompletion.length > 0) {
             setCelebratingPlayers(playersWithNewCompletion);
@@ -200,6 +209,7 @@ export default function NumberDrawer({
         setIsAnimating(false);
         setJustDrawn(null);
         setShowCelebration(false);
+        setNewlyCompletedRowsByCard(new Map());
         previousDrawnRef.current = [];
     }, [drawnNumbers.length, t.confirmRestart, setDrawnNumbers, setCurrentNumber]);
 
@@ -427,6 +437,7 @@ export default function NumberDrawer({
                                         grid={card.grid}
                                         drawnNumbers={drawnNumbers}
                                         playerName={card.playerName}
+                                        newlyCompletedRows={newlyCompletedRowsByCard.get(card.id) || []}
                                         compact
                                     />
                                 ))}

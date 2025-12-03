@@ -158,3 +158,17 @@ export function hasNewlyCompletedRow(
   const currentCompletedRows = getCompletedRows(card, currentDrawnNumbers);
   return currentCompletedRows.length > previousCompletedRows.length;
 }
+
+/**
+ * Returns indices of rows that were newly completed in the current draw.
+ * Compares previous and current drawn numbers to identify which rows just became complete.
+ */
+export function getNewlyCompletedRows(
+  card: LottoCard,
+  previousDrawnNumbers: number[],
+  currentDrawnNumbers: number[]
+): number[] {
+  const previousCompletedRows = getCompletedRows(card, previousDrawnNumbers);
+  const currentCompletedRows = getCompletedRows(card, currentDrawnNumbers);
+  return currentCompletedRows.filter(row => !previousCompletedRows.includes(row));
+}
