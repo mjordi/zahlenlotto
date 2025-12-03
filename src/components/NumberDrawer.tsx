@@ -309,28 +309,52 @@ export default function NumberDrawer({
                     </div>
                 </div>
 
-                {/* Playing Cards Display */}
-                {generatedCards.length > 0 && (
-                    <div className="glass-panel p-6 md:p-8">
-                        <h2 className="text-center text-2xl font-bold mb-6 bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-amber-400">
-                            {t.playingCards}
-                        </h2>
-                        <div className="text-center text-sm text-slate-400 mb-4">
-                            {generatedCards.length} {generatedCards.length === 1 ? t.card : t.cards}
+                {/* Playing Cards Display or Generate Cards Prompt */}
+                <div className="glass-panel p-6 md:p-8">
+                    {generatedCards.length > 0 ? (
+                        <>
+                            <h2 className="text-center text-2xl font-bold mb-6 bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-amber-400">
+                                {t.playingCards}
+                            </h2>
+                            <div className="text-center text-sm text-slate-400 mb-4">
+                                {generatedCards.length} {generatedCards.length === 1 ? t.card : t.cards}
+                            </div>
+                            <div className="grid grid-cols-2 gap-3 max-h-[600px] overflow-y-auto">
+                                {generatedCards.map((card) => (
+                                    <LottoCard
+                                        key={card.id}
+                                        cardNumber={card.id}
+                                        grid={card.grid}
+                                        drawnNumbers={drawnNumbers}
+                                        compact
+                                    />
+                                ))}
+                            </div>
+                        </>
+                    ) : (
+                        <div className="flex flex-col items-center justify-center h-full min-h-[400px]">
+                            <div className="text-center mb-8">
+                                <div className="text-6xl mb-4">🎴</div>
+                                <h3 className="text-2xl font-bold mb-2 bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-amber-400">
+                                    {t.tabGenerateCards}
+                                </h3>
+                                <p className="text-slate-400 text-sm">
+                                    {t.cardDescription}
+                                </p>
+                            </div>
+                            <button
+                                onClick={() => {
+                                    // Switch to generate tab
+                                    const event = new CustomEvent('switchToGenerateTab');
+                                    window.dispatchEvent(event);
+                                }}
+                                className="px-8 py-4 bg-amber-600 hover:bg-amber-500 text-white font-semibold rounded-xl transition-all duration-300 shadow-lg shadow-amber-500/20 hover:shadow-amber-500/40 active:scale-95"
+                            >
+                                {t.tabGenerateCards}
+                            </button>
                         </div>
-                        <div className="grid grid-cols-1 gap-4 max-h-[600px] overflow-y-auto">
-                            {generatedCards.map((card) => (
-                                <LottoCard
-                                    key={card.id}
-                                    cardNumber={card.id}
-                                    grid={card.grid}
-                                    drawnNumbers={drawnNumbers}
-                                    compact
-                                />
-                            ))}
-                        </div>
-                    </div>
-                )}
+                    )}
+                </div>
             </div>
 
             {/* Gezogene Zahlen Liste */}

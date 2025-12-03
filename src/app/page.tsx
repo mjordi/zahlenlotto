@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, lazy, Suspense } from 'react';
+import { useState, lazy, Suspense, useEffect } from 'react';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { SUPPORTED_LANGUAGES } from '@/utils/translations';
 import { LottoCard } from '@/utils/lotto';
@@ -31,6 +31,15 @@ export default function Home() {
         ...lang,
         label: t[lang.labelKey]
     }));
+
+    // Listen for tab switch event from NumberDrawer
+    useEffect(() => {
+        const handleSwitchTab = () => {
+            setActiveTab('generate');
+        };
+        window.addEventListener('switchToGenerateTab', handleSwitchTab);
+        return () => window.removeEventListener('switchToGenerateTab', handleSwitchTab);
+    }, []);
 
     return (
         <main className="min-h-screen p-4 md:p-8 pb-20">
