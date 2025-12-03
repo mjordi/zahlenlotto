@@ -206,6 +206,12 @@ export default function NumberDrawer({
     // Tastatursteuerung
     useEffect(() => {
         const handleKeyDown = (e: KeyboardEvent) => {
+            // Don't trigger shortcuts if user is typing in an input field
+            const target = e.target as HTMLElement;
+            if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA') {
+                return;
+            }
+
             if (e.code === 'Space' || e.code === 'Enter') {
                 e.preventDefault();
                 drawNumber();
