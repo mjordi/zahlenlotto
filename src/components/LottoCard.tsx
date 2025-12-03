@@ -7,9 +7,10 @@ interface LottoCardProps {
     grid: (number | null)[][];
     compact?: boolean;
     drawnNumbers?: number[];
+    playerName?: string;
 }
 
-export default function LottoCard({ cardNumber, grid, compact, drawnNumbers = [] }: LottoCardProps) {
+export default function LottoCard({ cardNumber, grid, compact, drawnNumbers = [], playerName }: LottoCardProps) {
     const { t } = useLanguage();
     const completedRows = getCompletedRows(grid, drawnNumbers);
 
@@ -19,14 +20,19 @@ export default function LottoCard({ cardNumber, grid, compact, drawnNumbers = []
 
     return (
         <div className={`border border-white/10 rounded-lg p-4 bg-slate-900/50 shadow-inner ${compact ? 'text-xs' : ''}`}>
-            <div className="text-blue-400 font-bold mb-2">{t.card} {cardNumber}</div>
+            <div className="flex items-center justify-between mb-2">
+                <div className="text-blue-400 font-bold">{t.card} {cardNumber}</div>
+                {playerName && (
+                    <div className="text-amber-400 font-semibold text-xs">{playerName}</div>
+                )}
+            </div>
             <div className="grid grid-rows-3 gap-0 border border-white/20 bg-slate-800">
                 {grid.map((row, rowIndex) => {
                     const isRowCompleted = completedRows.includes(rowIndex);
                     return (
                         <div
                             key={rowIndex}
-                            className={`grid grid-cols-9 ${isRowCompleted ? 'bg-gradient-to-r from-emerald-500/20 via-emerald-400/20 to-emerald-500/20' : ''}`}
+                            className={`grid grid-cols-9 ${isRowCompleted ? 'bg-gradient-to-r from-amber-500/40 via-amber-400/50 to-amber-500/40 animate-pulse' : ''}`}
                         >
                             {row.map((num, colIndex) => {
                                 const drawn = isNumberDrawn(num);

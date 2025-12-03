@@ -11,6 +11,8 @@ const NumberDrawer = lazy(() => import('@/components/NumberDrawer'));
 interface Card {
     id: number;
     grid: LottoCard;
+    playerId: number;
+    playerName: string;
 }
 
 export default function Home() {

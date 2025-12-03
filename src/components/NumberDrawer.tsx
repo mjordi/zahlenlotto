@@ -10,6 +10,8 @@ import { generatePdf } from '@/utils/pdfGenerator';
 interface Card {
     id: number;
     grid: LottoCardType;
+    playerId: number;
+    playerName: string;
 }
 
 interface NumberDrawerProps {
@@ -41,10 +43,13 @@ export default function NumberDrawer({
     const previousDrawnRef = useRef<number[]>([]);
 
     // Card generation state
-    const [totalCards, setTotalCards] = useState(10);
+    const [numberOfPlayers, setNumberOfPlayers] = useState(2);
+    const [cardsPerPlayer, setCardsPerPlayer] = useState(3);
+    const [playerNames, setPlayerNames] = useState<string[]>(['Spieler 1', 'Spieler 2']);
     const [isGenerating, setIsGenerating] = useState(false);
     const [cardsPerPage, setCardsPerPage] = useState(3);
     const [isExporting, setIsExporting] = useState(false);
+    const [celebratingPlayers, setCelebratingPlayers] = useState<string[]>([]);
 
     // Audio Context initialisieren
     const initAudio = useCallback(() => {
@@ -124,16 +129,18 @@ export default function NumberDrawer({
         if (generatedCards.length === 0) return;
 
         const previousDrawn = previousDrawnRef.current;
-        let hasNewCompletion = false;
+        const playersWithNewCompletion: string[] = [];
 
         for (const card of generatedCards) {
             if (hasNewlyCompletedRow(card.grid, previousDrawn, newDrawnNumbers)) {
-                hasNewCompletion = true;
-                break;
+                if (!playersWithNewCompletion.includes(card.playerName)) {
+                    playersWithNewCompletion.push(card.playerName);
+                }
             }
         }
 
-        if (hasNewCompletion) {
+        if (playersWithNewCompletion.length > 0) {
+            setCelebratingPlayers(playersWithNewCompletion);
             setShowCelebration(true);
             playCelebrationSound();
             triggerConfetti();
@@ -141,6 +148,7 @@ export default function NumberDrawer({
             // Hide celebration after 5 seconds
             setTimeout(() => {
                 setShowCelebration(false);
+                setCelebratingPlayers([]);
             }, 5000);
         }
 
@@ -214,6 +222,17 @@ export default function NumberDrawer({
         return () => window.removeEventListener('keydown', handleKeyDown);
     }, [drawNumber, reset, setSoundEnabled]);
 
+    // Update player names when number of players changes
+    useEffect(() => {
+        setPlayerNames(prev => {
+            const newNames = [...prev];
+            while (newNames.length < numberOfPlayers) {
+                newNames.push(`Spieler ${newNames.length + 1}`);
+            }
+            return newNames.slice(0, numberOfPlayers);
+        });
+    }, [numberOfPlayers]);
+
     const isNumberDrawn = (num: number) => drawnNumbers.includes(num);
     const remainingNumbers = TOTAL_NUMBERS - drawnNumbers.length;
 
@@ -222,16 +241,21 @@ export default function NumberDrawer({
         setIsGenerating(true);
         setTimeout(() => {
             const cards: Card[] = [];
-            for (let i = 0; i < totalCards; i++) {
-                cards.push({
-                    id: i + 1,
-                    grid: generateLottoCard(),
-                });
+            let cardId = 1;
+            for (let playerId = 0; playerId < numberOfPlayers; playerId++) {
+                for (let cardNum = 0; cardNum < cardsPerPlayer; cardNum++) {
+                    cards.push({
+                        id: cardId++,
+                        grid: generateLottoCard(),
+                        playerId: playerId,
+                        playerName: playerNames[playerId] || `Spieler ${playerId + 1}`,
+                    });
+                }
             }
             setGeneratedCards(cards);
             setIsGenerating(false);
         }, 100);
-    }, [totalCards, setGeneratedCards]);
+    }, [numberOfPlayers, cardsPerPlayer, playerNames, setGeneratedCards]);
 
     // Export to PDF function
     const exportToPDF = useCallback(() => {
@@ -391,6 +415,7 @@ export default function NumberDrawer({
                                         cardNumber={card.id}
                                         grid={card.grid}
                                         drawnNumbers={drawnNumbers}
+                                        playerName={card.playerName}
                                         compact
                                     />
                                 ))}
@@ -402,18 +427,53 @@ export default function NumberDrawer({
                                 {t.tabGenerateCards}
                             </h3>
                             <div className="w-full max-w-sm space-y-4">
-                                <div>
-                                    <label className="block text-sm font-medium text-slate-300 mb-2">
-                                        {t.totalCards}
-                                    </label>
-                                    <input
-                                        type="number"
-                                        min="1"
-                                        max="99"
-                                        value={totalCards}
-                                        onChange={(e) => setTotalCards(Math.min(99, Math.max(1, parseInt(e.target.value) || 1)))}
-                                        className="input-field w-full"
-                                    />
+                                <div className="grid grid-cols-2 gap-3">
+                                    <div>
+                                        <label className="block text-sm font-medium text-slate-300 mb-2">
+                                            Anzahl Spieler
+                                        </label>
+                                        <input
+                                            type="number"
+                                            min="1"
+                                            max="20"
+                                            value={numberOfPlayers}
+                                            onChange={(e) => setNumberOfPlayers(Math.min(20, Math.max(1, parseInt(e.target.value) || 1)))}
+                                            className="input-field w-full"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-sm font-medium text-slate-300 mb-2">
+                                            Karten pro Spieler
+                                        </label>
+                                        <input
+                                            type="number"
+                                            min="1"
+                                            max="10"
+                                            value={cardsPerPlayer}
+                                            onChange={(e) => setCardsPerPlayer(Math.min(10, Math.max(1, parseInt(e.target.value) || 1)))}
+                                            className="input-field w-full"
+                                        />
+                                    </div>
+                                </div>
+                                <div className="space-y-2 max-h-[200px] overflow-y-auto">
+                                    {Array.from({ length: numberOfPlayers }, (_, i) => (
+                                        <div key={i}>
+                                            <label className="block text-xs font-medium text-slate-400 mb-1">
+                                                Spieler {i + 1}
+                                            </label>
+                                            <input
+                                                type="text"
+                                                value={playerNames[i] || ''}
+                                                onChange={(e) => {
+                                                    const newNames = [...playerNames];
+                                                    newNames[i] = e.target.value;
+                                                    setPlayerNames(newNames);
+                                                }}
+                                                placeholder={`Spieler ${i + 1}`}
+                                                className="input-field w-full text-sm"
+                                            />
+                                        </div>
+                                    ))}
                                 </div>
                                 <button
                                     onClick={generateCards}
@@ -458,6 +518,9 @@ export default function NumberDrawer({
                             {t.lottoWin}
                         </div>
                         <div className="text-2xl font-semibold mt-4 text-center text-white/90">
+                            {celebratingPlayers.join(', ')}
+                        </div>
+                        <div className="text-xl font-medium mt-2 text-center text-white/80">
                             {t.rowComplete}
                         </div>
                     </div>
