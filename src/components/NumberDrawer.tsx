@@ -263,48 +263,74 @@ export default function NumberDrawer({
                 </div>
             </div>
 
-            {/* Zahlenübersicht */}
-            <div className="glass-panel p-6 md:p-8">
-                <h2 className="text-center text-2xl font-bold mb-6 bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-amber-400">
-                    {t.allNumbersOverview}
-                </h2>
+            {/* Two Column Layout: Numbers Overview and Playing Cards */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                {/* Zahlenübersicht */}
+                <div className="glass-panel p-6 md:p-8">
+                    <h2 className="text-center text-2xl font-bold mb-6 bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-amber-400">
+                        {t.allNumbersOverview}
+                    </h2>
 
-                {/* Zahlen Grid */}
-                <div className="grid grid-cols-10 gap-2 mb-8">
-                    {Array.from({ length: TOTAL_NUMBERS }, (_, i) => i + 1).map(num => {
-                        const drawn = isNumberDrawn(num);
-                        const isJustDrawn = num === justDrawn;
+                    {/* Zahlen Grid */}
+                    <div className="grid grid-cols-10 gap-2 mb-8">
+                        {Array.from({ length: TOTAL_NUMBERS }, (_, i) => i + 1).map(num => {
+                            const drawn = isNumberDrawn(num);
+                            const isJustDrawn = num === justDrawn;
 
-                        return (
-                            <div
-                                key={num}
-                                className={`
+                            return (
+                                <div
+                                    key={num}
+                                    className={`
                   aspect-square flex items-center justify-center rounded-lg font-semibold text-sm md:text-base
                   transition-all duration-500 border
                   ${drawn
-                                        ? 'bg-gradient-to-br from-emerald-500 to-emerald-700 text-white border-emerald-400/50 shadow-lg shadow-emerald-500/20 scale-105'
-                                        : 'bg-slate-800/30 text-slate-600 border-white/5'
-                                    }
+                                            ? 'bg-gradient-to-br from-emerald-500 to-emerald-700 text-white border-emerald-400/50 shadow-lg shadow-emerald-500/20 scale-105'
+                                            : 'bg-slate-800/30 text-slate-600 border-white/5'
+                                        }
                   ${isJustDrawn ? 'animate-bounce scale-125 z-10' : ''}
                 `}
-                            >
-                                {num}
-                            </div>
-                        );
-                    })}
+                                >
+                                    {num}
+                                </div>
+                            );
+                        })}
+                    </div>
+
+                    {/* Statistik */}
+                    <div className="flex justify-center gap-12 flex-wrap border-t border-white/5 pt-6">
+                        <div className="text-center">
+                            <div className="text-3xl font-bold text-blue-400">{drawnNumbers.length}</div>
+                            <div className="text-slate-500 text-sm uppercase tracking-wider font-medium">{t.drawn}</div>
+                        </div>
+                        <div className="text-center">
+                            <div className="text-3xl font-bold text-slate-400">{remainingNumbers}</div>
+                            <div className="text-slate-500 text-sm uppercase tracking-wider font-medium">{t.remaining}</div>
+                        </div>
+                    </div>
                 </div>
 
-                {/* Statistik */}
-                <div className="flex justify-center gap-12 flex-wrap border-t border-white/5 pt-6">
-                    <div className="text-center">
-                        <div className="text-3xl font-bold text-blue-400">{drawnNumbers.length}</div>
-                        <div className="text-slate-500 text-sm uppercase tracking-wider font-medium">{t.drawn}</div>
+                {/* Playing Cards Display */}
+                {generatedCards.length > 0 && (
+                    <div className="glass-panel p-6 md:p-8">
+                        <h2 className="text-center text-2xl font-bold mb-6 bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-amber-400">
+                            {t.playingCards}
+                        </h2>
+                        <div className="text-center text-sm text-slate-400 mb-4">
+                            {generatedCards.length} {generatedCards.length === 1 ? t.card : t.cards}
+                        </div>
+                        <div className="grid grid-cols-1 gap-4 max-h-[600px] overflow-y-auto">
+                            {generatedCards.map((card) => (
+                                <LottoCard
+                                    key={card.id}
+                                    cardNumber={card.id}
+                                    grid={card.grid}
+                                    drawnNumbers={drawnNumbers}
+                                    compact
+                                />
+                            ))}
+                        </div>
                     </div>
-                    <div className="text-center">
-                        <div className="text-3xl font-bold text-slate-400">{remainingNumbers}</div>
-                        <div className="text-slate-500 text-sm uppercase tracking-wider font-medium">{t.remaining}</div>
-                    </div>
-                </div>
+                )}
             </div>
 
             {/* Gezogene Zahlen Liste */}
@@ -328,29 +354,6 @@ export default function NumberDrawer({
                     )}
                 </div>
             </div>
-
-            {/* Playing Cards Display */}
-            {generatedCards.length > 0 && (
-                <div className="glass-panel p-6 md:p-8">
-                    <h2 className="text-center text-2xl font-bold mb-6 bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-amber-400">
-                        {t.playingCards}
-                    </h2>
-                    <div className="text-center text-sm text-slate-400 mb-4">
-                        {generatedCards.length} {generatedCards.length === 1 ? t.card : t.cards}
-                    </div>
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 max-h-[600px] overflow-y-auto">
-                        {generatedCards.map((card) => (
-                            <LottoCard
-                                key={card.id}
-                                cardNumber={card.id}
-                                grid={card.grid}
-                                drawnNumbers={drawnNumbers}
-                                compact
-                            />
-                        ))}
-                    </div>
-                </div>
-            )}
 
             {/* Celebration Overlay */}
             {showCelebration && (
