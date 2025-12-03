@@ -2,71 +2,89 @@
 
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 
-export type Theme = 'light' | 'dark';
+export type ThemePreference = 'light' | 'dark' | 'auto';
+export type AppliedTheme = 'light' | 'dark';
 
 interface ThemeContextType {
-    theme: Theme;
-    setTheme: (theme: Theme) => void;
-    toggleTheme: () => void;
+    themePreference: ThemePreference;
+    appliedTheme: AppliedTheme;
+    setThemePreference: (preference: ThemePreference) => void;
+    cycleTheme: () => void;
 }
 
 const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
 
 export function ThemeProvider({ children }: { children: ReactNode }) {
-    // Always start with 'dark' to avoid hydration mismatch
-    const [theme, setThemeState] = useState<Theme>('dark');
+    // Always start with 'auto' and 'dark' to avoid hydration mismatch
+    const [themePreference, setThemePreferenceState] = useState<ThemePreference>('auto');
+    const [appliedTheme, setAppliedTheme] = useState<AppliedTheme>('dark');
 
-    // After hydration, update to saved or system preference
+    // Get system theme preference
+    const getSystemTheme = (): AppliedTheme => {
+        if (typeof window === 'undefined') return 'dark';
+        return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+    };
+
+    // After hydration, update to saved preference or default to 'auto'
     useEffect(() => {
         // This effect runs once after hydration to sync client-side state
         // with localStorage/system preferences. This is necessary to avoid
         // hydration mismatches while still respecting user preferences.
 
-        // 1. Check localStorage
-        const savedTheme = localStorage.getItem('theme') as Theme;
-        if (savedTheme && ['light', 'dark'].includes(savedTheme)) {
-            setThemeState(savedTheme);
-            document.documentElement.setAttribute('data-theme', savedTheme);
-            return;
-        }
+        const savedPreference = localStorage.getItem('themePreference') as ThemePreference;
 
-        // 2. Check system preference
-        const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-        const systemTheme = prefersDark ? 'dark' : 'light';
-        setThemeState(systemTheme);
-        document.documentElement.setAttribute('data-theme', systemTheme);
+        if (savedPreference && ['light', 'dark', 'auto'].includes(savedPreference)) {
+            setThemePreferenceState(savedPreference);
+
+            // Apply theme based on preference
+            const theme = savedPreference === 'auto' ? getSystemTheme() : savedPreference;
+            setAppliedTheme(theme);
+            document.documentElement.setAttribute('data-theme', theme);
+        } else {
+            // Default to 'auto' if no preference saved
+            const systemTheme = getSystemTheme();
+            setAppliedTheme(systemTheme);
+            document.documentElement.setAttribute('data-theme', systemTheme);
+        }
     }, []);
 
-    // Listen for system theme changes
+    // Listen for system theme changes when in auto mode
     useEffect(() => {
         const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
 
         const handleChange = (e: MediaQueryListEvent) => {
-            // Only update if user hasn't manually set a preference
-            const savedTheme = localStorage.getItem('theme');
-            if (!savedTheme) {
+            // Only update if preference is 'auto'
+            if (themePreference === 'auto') {
                 const newTheme = e.matches ? 'dark' : 'light';
-                setThemeState(newTheme);
+                setAppliedTheme(newTheme);
                 document.documentElement.setAttribute('data-theme', newTheme);
             }
         };
 
         mediaQuery.addEventListener('change', handleChange);
         return () => mediaQuery.removeEventListener('change', handleChange);
-    }, []);
+    }, [themePreference]);
 
-    const setTheme = (newTheme: Theme) => {
-        setThemeState(newTheme);
-        localStorage.setItem('theme', newTheme);
-        document.documentElement.setAttribute('data-theme', newTheme);
+    const setThemePreference = (preference: ThemePreference) => {
+        setThemePreferenceState(preference);
+        localStorage.setItem('themePreference', preference);
+
+        // Apply theme based on preference
+        const theme = preference === 'auto' ? getSystemTheme() : preference;
+        setAppliedTheme(theme);
+        document.documentElement.setAttribute('data-theme', theme);
     };
 
-    const toggleTheme = () => {
-        setTheme(theme === 'light' ? 'dark' : 'light');
+    const cycleTheme = () => {
+        // Cycle: auto -> light -> dark -> auto
+        const nextPreference: ThemePreference =
+            themePreference === 'auto' ? 'light' :
+            themePreference === 'light' ? 'dark' : 'auto';
+        setThemePreference(nextPreference);
     };
 
     return (
-        <ThemeContext.Provider value={{ theme, setTheme, toggleTheme }}>
+        <ThemeContext.Provider value={{ themePreference, appliedTheme, setThemePreference, cycleTheme }}>
             {children}
         </ThemeContext.Provider>
     );

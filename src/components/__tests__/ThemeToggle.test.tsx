@@ -48,13 +48,27 @@ describe('ThemeToggle', () => {
         expect(button).toBeInTheDocument();
     });
 
-    it('should show sun icon when in dark mode', async () => {
+    it('should show monitor icon when in auto mode', async () => {
         mockMatchMedia(true);
         renderThemeToggle();
 
         await waitFor(() => {
             const button = screen.getByRole('button');
-            // Sun icon has a circle element
+            const svg = button.querySelector('svg');
+            expect(svg).toBeInTheDocument();
+            // Monitor icon has a rect element
+            const rect = button.querySelector('rect');
+            expect(rect).toBeInTheDocument();
+        });
+    });
+
+    it('should show sun icon when in light mode', async () => {
+        mockMatchMedia(false);
+        localStorage.setItem('themePreference', 'light');
+        renderThemeToggle();
+
+        await waitFor(() => {
+            const button = screen.getByRole('button');
             const svg = button.querySelector('svg');
             expect(svg).toBeInTheDocument();
             // Sun icon has multiple line elements for rays
@@ -63,9 +77,9 @@ describe('ThemeToggle', () => {
         });
     });
 
-    it('should show moon icon when in light mode', async () => {
-        mockMatchMedia(false);
-        localStorage.setItem('theme', 'light');
+    it('should show moon icon when in dark mode', async () => {
+        mockMatchMedia(true);
+        localStorage.setItem('themePreference', 'dark');
         renderThemeToggle();
 
         await waitFor(() => {
@@ -75,79 +89,110 @@ describe('ThemeToggle', () => {
             // Moon icon has a path element
             const path = button.querySelector('path');
             expect(path).toBeInTheDocument();
+            expect(path?.getAttribute('d')).toContain('M21');
         });
     });
 
-    it('should toggle theme when clicked', async () => {
+    it('should cycle through themes when clicked', async () => {
         mockMatchMedia(true);
         const user = userEvent.setup();
         renderThemeToggle();
 
+        const button = screen.getByRole('button');
+
+        // Should start in auto mode
         await waitFor(() => {
-            expect(document.documentElement.setAttribute).toHaveBeenCalledWith('data-theme', 'dark');
+            expect(localStorage.getItem('themePreference')).toBeNull();
         });
 
-        const button = screen.getByRole('button');
+        // First click: auto -> light
         await user.click(button);
-
         await waitFor(() => {
-            expect(localStorage.getItem('theme')).toBe('light');
+            expect(localStorage.getItem('themePreference')).toBe('light');
             expect(document.documentElement.setAttribute).toHaveBeenCalledWith('data-theme', 'light');
-        });
-    });
-
-    it('should have proper aria-label for dark mode', async () => {
-        mockMatchMedia(true);
-        renderThemeToggle();
-
-        await waitFor(() => {
-            const button = screen.getByRole('button');
-            // In German (default language): "Zu hellem Modus wechseln"
-            expect(button).toHaveAttribute('aria-label');
-            const label = button.getAttribute('aria-label');
-            expect(label).toContain('hell'); // German for "light"
-        });
-    });
-
-    it('should have proper aria-label for light mode', async () => {
-        mockMatchMedia(false);
-        localStorage.setItem('theme', 'light');
-        renderThemeToggle();
-
-        await waitFor(() => {
-            const button = screen.getByRole('button');
-            // In German (default language): "Zu dunklem Modus wechseln"
-            expect(button).toHaveAttribute('aria-label');
-            const label = button.getAttribute('aria-label');
-            // Check for "dunklem" (dative case of "dark" in German)
-            expect(label).toBeTruthy();
-            expect(label).toContain('Modus'); // Just check it has "Modus" to confirm structure
-        });
-    });
-
-    it('should toggle multiple times correctly', async () => {
-        mockMatchMedia(true);
-        const user = userEvent.setup();
-        renderThemeToggle();
-
-        const button = screen.getByRole('button');
-
-        // First click: dark -> light
-        await user.click(button);
-        await waitFor(() => {
-            expect(localStorage.getItem('theme')).toBe('light');
         });
 
         // Second click: light -> dark
         await user.click(button);
         await waitFor(() => {
-            expect(localStorage.getItem('theme')).toBe('dark');
+            expect(localStorage.getItem('themePreference')).toBe('dark');
+            expect(document.documentElement.setAttribute).toHaveBeenCalledWith('data-theme', 'dark');
         });
 
-        // Third click: dark -> light
+        // Third click: dark -> auto
         await user.click(button);
         await waitFor(() => {
-            expect(localStorage.getItem('theme')).toBe('light');
+            expect(localStorage.getItem('themePreference')).toBe('auto');
         });
+    });
+
+    it('should have proper aria-label for auto mode', async () => {
+        mockMatchMedia(true);
+        renderThemeToggle();
+
+        await waitFor(() => {
+            const button = screen.getByRole('button');
+            expect(button).toHaveAttribute('aria-label');
+            const label = button.getAttribute('aria-label');
+            // In German (default language): "Automatisch"
+            expect(label).toContain('Automatisch');
+        });
+    });
+
+    it('should have proper aria-label for light mode', async () => {
+        mockMatchMedia(false);
+        localStorage.setItem('themePreference', 'light');
+        renderThemeToggle();
+
+        await waitFor(() => {
+            const button = screen.getByRole('button');
+            expect(button).toHaveAttribute('aria-label');
+            const label = button.getAttribute('aria-label');
+            // In German (default language): "Hell"
+            expect(label).toBe('Hell');
+        });
+    });
+
+    it('should have proper aria-label for dark mode', async () => {
+        mockMatchMedia(true);
+        localStorage.setItem('themePreference', 'dark');
+        renderThemeToggle();
+
+        await waitFor(() => {
+            const button = screen.getByRole('button');
+            expect(button).toHaveAttribute('aria-label');
+            const label = button.getAttribute('aria-label');
+            // In German (default language): "Dunkel"
+            expect(label).toBe('Dunkel');
+        });
+    });
+
+    it('should cycle correctly multiple times', async () => {
+        mockMatchMedia(true);
+        const user = userEvent.setup();
+        renderThemeToggle();
+
+        const button = screen.getByRole('button');
+
+        // Cycle through all modes twice
+        for (let i = 0; i < 2; i++) {
+            // auto -> light
+            await user.click(button);
+            await waitFor(() => {
+                expect(localStorage.getItem('themePreference')).toBe('light');
+            });
+
+            // light -> dark
+            await user.click(button);
+            await waitFor(() => {
+                expect(localStorage.getItem('themePreference')).toBe('dark');
+            });
+
+            // dark -> auto
+            await user.click(button);
+            await waitFor(() => {
+                expect(localStorage.getItem('themePreference')).toBe('auto');
+            });
+        }
     });
 });

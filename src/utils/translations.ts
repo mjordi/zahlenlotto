@@ -85,8 +85,9 @@ export interface Translations {
     playerLabel: string;
 
     // Theme
-    switchToLightMode: string;
-    switchToDarkMode: string;
+    themeAuto: string;
+    themeLight: string;
+    themeDark: string;
 }
 
 export const translations: Record<Language, Translations> = {
@@ -168,8 +169,9 @@ export const translations: Record<Language, Translations> = {
         playerLabel: 'Spieler',
 
         // Theme
-        switchToLightMode: 'Zu hellem Modus wechseln',
-        switchToDarkMode: 'Zu dunklem Modus wechseln',
+        themeAuto: 'Automatisch',
+        themeLight: 'Hell',
+        themeDark: 'Dunkel',
     },
 
     en: {
@@ -250,8 +252,9 @@ export const translations: Record<Language, Translations> = {
         playerLabel: 'Player',
 
         // Theme
-        switchToLightMode: 'Switch to light mode',
-        switchToDarkMode: 'Switch to dark mode',
+        themeAuto: 'Automatic',
+        themeLight: 'Light',
+        themeDark: 'Dark',
     },
 
     fr: {
@@ -332,8 +335,9 @@ export const translations: Record<Language, Translations> = {
         playerLabel: 'Joueur',
 
         // Theme
-        switchToLightMode: 'Passer au mode clair',
-        switchToDarkMode: 'Passer au mode sombre',
+        themeAuto: 'Automatique',
+        themeLight: 'Clair',
+        themeDark: 'Sombre',
     },
 
     it: {
@@ -414,8 +418,9 @@ export const translations: Record<Language, Translations> = {
         playerLabel: 'Giocatore',
 
         // Theme
-        switchToLightMode: 'Passa alla modalità chiara',
-        switchToDarkMode: 'Passa alla modalità scura',
+        themeAuto: 'Automatico',
+        themeLight: 'Chiaro',
+        themeDark: 'Scuro',
     },
 };
 
