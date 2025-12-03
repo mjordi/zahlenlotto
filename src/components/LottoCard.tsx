@@ -64,7 +64,7 @@ export default function LottoCard({ cardNumber, grid, compact, drawnNumbers = []
                                         style={
                                             num !== null
                                                 ? drawn
-                                                    ? { border: '1px solid rgba(255, 255, 255, 0.1)' }
+                                                    ? { border: `1px solid var(--lotto-card-border)` }
                                                     : {
                                                         background: 'var(--lotto-cell-bg)',
                                                         color: 'var(--lotto-cell-text)',
