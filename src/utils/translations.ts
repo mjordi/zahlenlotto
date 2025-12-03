@@ -72,6 +72,16 @@ export interface Translations {
     languageFrench: string;
     languageItalian: string;
     selectLanguage: string;
+
+    // Playing Cards
+    playingCards: string;
+    lottoWin: string;
+    rowComplete: string;
+
+    // Player Settings
+    numberOfPlayers: string;
+    cardsPerPlayer: string;
+    playerLabel: string;
 }
 
 export const translations: Record<Language, Translations> = {
@@ -140,6 +150,16 @@ export const translations: Record<Language, Translations> = {
         languageFrench: 'Français',
         languageItalian: 'Italiano',
         selectLanguage: 'Sprache wählen',
+
+        // Playing Cards
+        playingCards: 'Spielkarten',
+        lottoWin: 'LOTTO!',
+        rowComplete: 'Reihe komplett!',
+
+        // Player Settings
+        numberOfPlayers: 'Anzahl Spieler',
+        cardsPerPlayer: 'Karten pro Spieler',
+        playerLabel: 'Spieler',
     },
 
     en: {
@@ -207,6 +227,16 @@ export const translations: Record<Language, Translations> = {
         languageFrench: 'Français',
         languageItalian: 'Italiano',
         selectLanguage: 'Select language',
+
+        // Playing Cards
+        playingCards: 'Playing Cards',
+        lottoWin: 'LOTTO!',
+        rowComplete: 'Row Complete!',
+
+        // Player Settings
+        numberOfPlayers: 'Number of Players',
+        cardsPerPlayer: 'Cards per Player',
+        playerLabel: 'Player',
     },
 
     fr: {
@@ -274,6 +304,16 @@ export const translations: Record<Language, Translations> = {
         languageFrench: 'Français',
         languageItalian: 'Italiano',
         selectLanguage: 'Choisir la langue',
+
+        // Playing Cards
+        playingCards: 'Cartes de Jeu',
+        lottoWin: 'LOTO!',
+        rowComplete: 'Ligne Complète!',
+
+        // Player Settings
+        numberOfPlayers: 'Nombre de Joueurs',
+        cardsPerPlayer: 'Cartes par Joueur',
+        playerLabel: 'Joueur',
     },
 
     it: {
@@ -341,6 +381,16 @@ export const translations: Record<Language, Translations> = {
         languageFrench: 'Français',
         languageItalian: 'Italiano',
         selectLanguage: 'Seleziona lingua',
+
+        // Playing Cards
+        playingCards: 'Cartelle da Gioco',
+        lottoWin: 'TOMBOLA!',
+        rowComplete: 'Riga Completa!',
+
+        // Player Settings
+        numberOfPlayers: 'Numero di Giocatori',
+        cardsPerPlayer: 'Cartelle per Giocatore',
+        playerLabel: 'Giocatore',
     },
 };
 

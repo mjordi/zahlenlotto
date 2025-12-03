@@ -5,6 +5,8 @@ import { COLUMN_LABELS } from './lotto';
 interface Card {
     id: number;
     grid: (number | null)[][];
+    playerId?: number;
+    playerName?: string;
 }
 
 interface PdfConfig {
@@ -71,7 +73,17 @@ export function generatePdf(cards: Card[], t: Translations, config: PdfConfig): 
                 pdf.setFont('helvetica', 'bold');
                 pdf.setFontSize(14);
                 pdf.setTextColor(37, 99, 235); // #2563EB
-                pdf.text(`${t.card} ${card.id}`, margin, cardY + 8);
+                const cardTitle = `${t.card} ${card.id}`;
+                pdf.text(cardTitle, margin, cardY + 8);
+
+                // Spielername (rechts neben Kartentitel)
+                if (card.playerName) {
+                    pdf.setFont('helvetica', 'bold');
+                    pdf.setFontSize(12);
+                    pdf.setTextColor(251, 191, 36); // #FBBF24 amber-400
+                    const playerNameWidth = pdf.getTextWidth(card.playerName);
+                    pdf.text(card.playerName, pageWidth - margin - playerNameWidth, cardY + 8);
+                }
 
                 const tableWidth = 9 * cellWidth;
                 const tableHeight = 3 * cellHeight;
