@@ -47,6 +47,8 @@ const nextConfig: NextConfig = {
               `img-src 'self' data: blob:${allowVercelLive ? ' https://vercel.live https://vercel.com' : ''}`,
               `font-src 'self' data:${allowVercelLive ? ' https://vercel.live https://assets.vercel.com' : ''}`,
               `connect-src 'self'${isDev ? ' ws: wss:' : ''}${allowVercelLive ? ' https://vercel.live wss://ws-us3.pusher.com' : ''}`,
+              // Allow workers from blob URLs (needed for canvas-confetti and Next.js)
+              "worker-src 'self' blob:",
               // Vercel Live needs to embed feedback iframe
               allowVercelLive ? "frame-src https://vercel.live" : "frame-src 'none'",
               "object-src 'none'",
