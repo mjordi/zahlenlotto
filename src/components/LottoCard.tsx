@@ -40,14 +40,14 @@ export default function LottoCard({ cardNumber, grid, compact, drawnNumbers = []
                                     <div
                                         key={colIndex}
                                         className={`
-                                            aspect-[3/4] flex items-center justify-center border border-white/10
+                                            aspect-[3/4] flex items-center justify-center
                                             relative transition-all duration-300
-                                            ${compact ? 'text-[10px] sm:text-xs' : ''}
+                                            ${compact ? 'text-[9px] sm:text-[10px]' : ''}
                                             ${num !== null
                                                 ? drawn
-                                                    ? 'font-bold text-white bg-emerald-600 shadow-inner'
-                                                    : 'font-bold text-slate-900 bg-white'
-                                                : 'bg-slate-800/50'
+                                                    ? 'font-bold text-white bg-emerald-600 shadow-inner border border-white/10'
+                                                    : 'font-bold text-slate-900 bg-white border border-slate-300'
+                                                : 'bg-slate-800/50 border border-white/10'
                                             }
                                         `}
                                     >
