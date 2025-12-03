@@ -11,8 +11,8 @@ export default function LottoCard({ cardNumber, grid, compact }: LottoCardProps)
     const { t } = useLanguage();
 
     return (
-        <div className={`card-container rounded-lg p-4 shadow-inner ${compact ? 'text-xs' : ''}`}>
-            <div className="card-title font-bold mb-2">{t.card} {cardNumber}</div>
+        <div className={`card-container rounded-lg shadow-inner ${compact ? 'text-xs p-3' : 'p-4'}`}>
+            <div className={`card-title font-bold ${compact ? 'mb-1.5 text-xs' : 'mb-2'}`}>{t.card} {cardNumber}</div>
             <div className="grid grid-rows-3 gap-0 card-grid-container">
                 {grid.map((row, rowIndex) => (
                     <div key={rowIndex} className="grid grid-cols-9">

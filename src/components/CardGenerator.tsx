@@ -116,13 +116,13 @@ export default function CardGenerator() {
                         {generatedCards.length} {generatedCards.length === 1 ? t.card : t.cards} {t.cardsGenerated}
                     </div>
 
-                    <div ref={cardsRef} className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div ref={cardsRef} className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-w-3xl mx-auto">
                         {generatedCards.slice(0, 12).map((card) => (
                             <LottoCard
                                 key={card.id}
                                 cardNumber={card.id}
                                 grid={card.grid}
-                                compact={cardsPerPage >= 4}
+                                compact={true}
                             />
                         ))}
                     </div>
