@@ -1,36 +1,177 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Zahlenlotto - Lottery Number Drawing & Card Generator
+
+A modern web application for generating traditional 90-number Tombola/Bingo cards and conducting live number drawings with real-time card tracking.
+
+## Features
+
+### 🎲 Number Drawing
+- Interactive number drawing interface (1-90)
+- Visual grid showing all numbers with drawn status
+- Audio feedback for each drawn number
+- Keyboard shortcuts for quick drawing
+- Complete drawing history
+- Drawing statistics (drawn vs. remaining)
+
+### 🎴 Card Generation & Live Tracking
+- Generate 1-99 unique lottery cards
+- Traditional format: 3 rows × 9 columns, 5 numbers per row
+- **Live card display during number drawing**
+- **Real-time number marking on cards**
+- **Automatic row completion detection**
+- **Celebration animation with confetti and sound when a row completes**
+- Export cards to PDF with customizable layout
+- Multiple cards per page (2-5 cards)
+
+### 🌍 Multi-Language Support
+- German (Deutsch) 🇩🇪
+- English 🇬🇧
+- French (Français) 🇫🇷
+- Italian (Italiano) 🇮🇹
+
+### 🎨 Modern UI/UX
+- Dark mode design with glass morphism effects
+- Responsive layout (mobile, tablet, desktop)
+- Smooth animations and transitions
+- Accessible keyboard navigation
+
+## How to Play
+
+1. **Generate Cards**: Switch to the "Generate Cards" tab and create your lottery cards
+2. **Draw Numbers**: Switch to the "Draw Numbers" tab to start the game
+3. **Live Tracking**: Your generated cards will appear below the number grid
+4. **Watch for Completion**: As numbers are drawn, they're automatically marked on all cards
+5. **Celebrate**: When a row is completed, enjoy the confetti celebration and "LOTTO!" announcement!
 
 ## Getting Started
 
-First, run the development server:
+### Prerequisites
+- Node.js 18+
+- npm, yarn, pnpm, or bun
+
+### Installation
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+# Clone the repository
+git clone <repository-url>
+
+# Navigate to project directory
+cd zahlenlotto
+
+# Install dependencies
+npm install
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+### Development
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+```bash
+# Start the development server
+npm run dev
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+# Open http://localhost:3000 in your browser
+```
 
-## Learn More
+### Testing
 
-To learn more about Next.js, take a look at the following resources:
+```bash
+# Run all tests
+npm test
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+# Run tests in watch mode
+npm run test:watch
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+# Generate coverage report
+npm run test:coverage
+```
 
-## Deploy on Vercel
+### Building
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+```bash
+# Create production build
+npm run build
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+# Start production server
+npm start
+```
+
+### Linting
+
+```bash
+# Run ESLint
+npm run lint
+```
+
+## Project Structure
+
+```
+zahlenlotto/
+├── src/
+│   ├── app/              # Next.js App Router
+│   │   ├── page.tsx      # Main page with state management
+│   │   ├── layout.tsx    # Root layout
+│   │   └── globals.css   # Global styles
+│   ├── components/       # React components
+│   │   ├── CardGenerator.tsx
+│   │   ├── NumberDrawer.tsx
+│   │   ├── LottoCard.tsx
+│   │   └── __tests__/    # Component tests
+│   ├── contexts/         # React contexts
+│   │   └── LanguageContext.tsx
+│   └── utils/            # Utility functions
+│       ├── lotto.ts      # Card generation & row completion logic
+│       ├── translations.ts
+│       ├── pdfGenerator.ts
+│       └── __tests__/    # Utility tests
+├── public/               # Static assets
+└── [config files]
+```
+
+## Technology Stack
+
+- **Framework**: Next.js 16 (App Router)
+- **Language**: TypeScript
+- **Styling**: Tailwind CSS 4
+- **PDF Export**: jsPDF
+- **Animations**: canvas-confetti
+- **Testing**: Jest + React Testing Library
+- **Deployment**: Vercel
+
+## Card Format
+
+Traditional Tombola/Bingo format:
+- 3 rows × 9 columns grid
+- 5 numbers per row (4 empty cells)
+- 15 total numbers per card
+- Numbers 1-90 distributed by column:
+  - Column 1: 1-9
+  - Column 2: 10-19
+  - Column 3: 20-29
+  - ...
+  - Column 9: 80-90
+- Numbers sorted within each column
+- All numbers unique per card
+
+## Keyboard Shortcuts
+
+- **Space / Enter**: Draw next number
+- **R**: Reset game
+- **M**: Toggle sound on/off
+
+## Development Guidelines
+
+See [AGENTS.md](./AGENTS.md) for detailed development guidelines and project conventions.
+
+## License
+
+This project is licensed under the MIT License.
+
+## Contributing
+
+Contributions are welcome! Please ensure:
+- All tests pass (`npm test`)
+- Linting passes (`npm run lint`)
+- Build succeeds (`npm run build`)
+- Documentation is updated
+
+## Support
+
+For issues or questions, please open an issue on the GitHub repository.

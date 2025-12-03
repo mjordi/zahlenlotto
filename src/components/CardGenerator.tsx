@@ -9,10 +9,14 @@ interface Card {
     grid: LottoCardType;
 }
 
-export default function CardGenerator() {
+interface CardGeneratorProps {
+    generatedCards: Card[];
+    setGeneratedCards: (cards: Card[]) => void;
+}
+
+export default function CardGenerator({ generatedCards, setGeneratedCards }: CardGeneratorProps) {
     const [totalCards, setTotalCards] = useState(10);
     const [cardsPerPage, setCardsPerPage] = useState(3);
-    const [generatedCards, setGeneratedCards] = useState<Card[]>([]);
     const [isGenerating, setIsGenerating] = useState(false);
     const [isExporting, setIsExporting] = useState(false);
     const cardsRef = useRef<HTMLDivElement>(null);
@@ -31,7 +35,7 @@ export default function CardGenerator() {
             setGeneratedCards(cards);
             setIsGenerating(false);
         }, 100);
-    }, [totalCards]);
+    }, [totalCards, setGeneratedCards]);
 
     const exportToPDF = useCallback(() => {
         if (generatedCards.length === 0) return;

@@ -3,10 +3,16 @@
 import { useState, lazy, Suspense } from 'react';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { SUPPORTED_LANGUAGES } from '@/utils/translations';
+import { LottoCard } from '@/utils/lotto';
 
 // Lazy load heavy components to reduce initial bundle
 const NumberDrawer = lazy(() => import('@/components/NumberDrawer'));
 const CardGenerator = lazy(() => import('@/components/CardGenerator'));
+
+interface Card {
+    id: number;
+    grid: LottoCard;
+}
 
 export default function Home() {
     const [activeTab, setActiveTab] = useState<'draw' | 'generate'>('draw');
@@ -17,6 +23,9 @@ export default function Home() {
     const [drawnNumbers, setDrawnNumbers] = useState<number[]>([]);
     const [currentNumber, setCurrentNumber] = useState<number | null>(null);
     const [soundEnabled, setSoundEnabled] = useState(true);
+
+    // Lifted state for generated cards to share between tabs
+    const [generatedCards, setGeneratedCards] = useState<Card[]>([]);
 
     const languages = SUPPORTED_LANGUAGES.map(lang => ({
         ...lang,
@@ -109,9 +118,13 @@ export default function Home() {
                                 setCurrentNumber={setCurrentNumber}
                                 soundEnabled={soundEnabled}
                                 setSoundEnabled={setSoundEnabled}
+                                generatedCards={generatedCards}
                             />
                         ) : (
-                            <CardGenerator />
+                            <CardGenerator
+                                generatedCards={generatedCards}
+                                setGeneratedCards={setGeneratedCards}
+                            />
                         )}
                     </Suspense>
                 </div>

@@ -1,4 +1,12 @@
-import { generateLottoCard, generateUniqueNumbers, getRandomNumber, TOTAL_NUMBERS } from '../lotto';
+import {
+  generateLottoCard,
+  generateUniqueNumbers,
+  getRandomNumber,
+  TOTAL_NUMBERS,
+  isRowComplete,
+  getCompletedRows,
+  hasNewlyCompletedRow
+} from '../lotto';
 
 describe('lotto utilities', () => {
   describe('getRandomNumber', () => {
@@ -136,6 +144,132 @@ describe('lotto utilities', () => {
         const colNumbers = card.map(row => row[col]).filter(n => n !== null);
         expect(colNumbers.length).toBeLessThanOrEqual(3);
       }
+    });
+  });
+
+  describe('isRowComplete', () => {
+    it('should return true when all 5 numbers in a row are drawn', () => {
+      const row = [1, null, 23, null, 45, null, 67, null, 89];
+      const drawnNumbers = [1, 23, 45, 67, 89];
+
+      expect(isRowComplete(row, drawnNumbers)).toBe(true);
+    });
+
+    it('should return false when not all numbers in a row are drawn', () => {
+      const row = [1, null, 23, null, 45, null, 67, null, 89];
+      const drawnNumbers = [1, 23, 45, 67]; // Missing 89
+
+      expect(isRowComplete(row, drawnNumbers)).toBe(false);
+    });
+
+    it('should return false when no numbers in a row are drawn', () => {
+      const row = [1, null, 23, null, 45, null, 67, null, 89];
+      const drawnNumbers = [2, 24, 46, 68, 90];
+
+      expect(isRowComplete(row, drawnNumbers)).toBe(false);
+    });
+
+    it('should return false for an empty row', () => {
+      const row = [null, null, null, null, null, null, null, null, null];
+      const drawnNumbers = [1, 2, 3, 4, 5];
+
+      expect(isRowComplete(row, drawnNumbers)).toBe(false);
+    });
+
+    it('should handle rows with numbers in different positions', () => {
+      const row = [null, 12, null, 34, null, 56, null, 78, null];
+      const drawnNumbers = [12, 34, 56, 78, 90];
+
+      expect(isRowComplete(row, drawnNumbers)).toBe(false); // Only 4 numbers in row
+    });
+  });
+
+  describe('getCompletedRows', () => {
+    it('should return empty array when no rows are complete', () => {
+      const card = [
+        [1, null, 23, null, 45, null, 67, null, 89],
+        [null, 12, null, 34, null, 56, null, 78, null],
+        [5, null, 28, null, 48, null, 71, null, 90],
+      ];
+      const drawnNumbers = [1, 12, 23];
+
+      expect(getCompletedRows(card, drawnNumbers)).toEqual([]);
+    });
+
+    it('should return indices of completed rows', () => {
+      const card = [
+        [1, null, 23, null, 45, null, 67, null, 89],
+        [null, 12, null, 34, null, 56, null, 78, null],
+        [5, null, 28, null, 48, null, 71, null, 90],
+      ];
+      const drawnNumbers = [1, 23, 45, 67, 89]; // First row complete
+
+      expect(getCompletedRows(card, drawnNumbers)).toEqual([0]);
+    });
+
+    it('should return multiple row indices when multiple rows are complete', () => {
+      const card = [
+        [1, null, 23, null, 45, null, 67, null, 89],
+        [null, 12, null, 34, null, 56, 68, 78, null],
+        [5, null, 28, null, 48, null, 71, null, 90],
+      ];
+      const drawnNumbers = [1, 23, 45, 67, 89, 12, 34, 56, 68, 78, 5, 28, 48, 71, 90];
+
+      const completedRows = getCompletedRows(card, drawnNumbers);
+      expect(completedRows).toHaveLength(3);
+      expect(completedRows).toContain(0);
+      expect(completedRows).toContain(1);
+      expect(completedRows).toContain(2);
+    });
+
+    it('should handle cards with no complete rows', () => {
+      const card = generateLottoCard();
+      const drawnNumbers: number[] = [];
+
+      expect(getCompletedRows(card, drawnNumbers)).toEqual([]);
+    });
+  });
+
+  describe('hasNewlyCompletedRow', () => {
+    const card = [
+      [1, null, 23, null, 45, null, 67, null, 89],
+      [null, 12, null, 34, null, 56, 68, 78, null],
+      [5, null, 28, null, 48, null, 71, null, 90],
+    ];
+
+    it('should return true when a new row is completed', () => {
+      const previousDrawn = [1, 23, 45, 67];
+      const currentDrawn = [1, 23, 45, 67, 89]; // Row 0 just completed
+
+      expect(hasNewlyCompletedRow(card, previousDrawn, currentDrawn)).toBe(true);
+    });
+
+    it('should return false when no new row is completed', () => {
+      const previousDrawn = [1, 23, 45];
+      const currentDrawn = [1, 23, 45, 67]; // Still not complete
+
+      expect(hasNewlyCompletedRow(card, previousDrawn, currentDrawn)).toBe(false);
+    });
+
+    it('should return false when row was already complete', () => {
+      const previousDrawn = [1, 23, 45, 67, 89]; // Already complete
+      const currentDrawn = [1, 23, 45, 67, 89, 12]; // Still complete, but no new completion
+
+      expect(hasNewlyCompletedRow(card, previousDrawn, currentDrawn)).toBe(false);
+    });
+
+    it('should return true when second row is completed after first', () => {
+      const previousDrawn = [1, 23, 45, 67, 89]; // Row 0 complete
+      const currentDrawn = [1, 23, 45, 67, 89, 12, 34, 56, 68, 78]; // Row 1 now complete
+
+      expect(hasNewlyCompletedRow(card, previousDrawn, currentDrawn)).toBe(true);
+    });
+
+    it('should return false when no numbers are drawn', () => {
+      const previousDrawn: number[] = [];
+      const currentDrawn: number[] = [];
+
+      expect(hasNewlyCompletedRow(card, previousDrawn, currentDrawn)).toBe(false);
     });
   });
 });

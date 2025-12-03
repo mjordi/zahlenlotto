@@ -72,6 +72,11 @@ export interface Translations {
     languageFrench: string;
     languageItalian: string;
     selectLanguage: string;
+
+    // Playing Cards
+    playingCards: string;
+    lottoWin: string;
+    rowComplete: string;
 }
 
 export const translations: Record<Language, Translations> = {
@@ -140,6 +145,11 @@ export const translations: Record<Language, Translations> = {
         languageFrench: 'Français',
         languageItalian: 'Italiano',
         selectLanguage: 'Sprache wählen',
+
+        // Playing Cards
+        playingCards: 'Spielkarten',
+        lottoWin: 'LOTTO!',
+        rowComplete: 'Reihe komplett!',
     },
 
     en: {
@@ -207,6 +217,11 @@ export const translations: Record<Language, Translations> = {
         languageFrench: 'Français',
         languageItalian: 'Italiano',
         selectLanguage: 'Select language',
+
+        // Playing Cards
+        playingCards: 'Playing Cards',
+        lottoWin: 'LOTTO!',
+        rowComplete: 'Row Complete!',
     },
 
     fr: {
@@ -274,6 +289,11 @@ export const translations: Record<Language, Translations> = {
         languageFrench: 'Français',
         languageItalian: 'Italiano',
         selectLanguage: 'Choisir la langue',
+
+        // Playing Cards
+        playingCards: 'Cartes de Jeu',
+        lottoWin: 'LOTO!',
+        rowComplete: 'Ligne Complète!',
     },
 
     it: {
@@ -341,6 +361,11 @@ export const translations: Record<Language, Translations> = {
         languageFrench: 'Français',
         languageItalian: 'Italiano',
         selectLanguage: 'Seleziona lingua',
+
+        // Playing Cards
+        playingCards: 'Cartelle da Gioco',
+        lottoWin: 'TOMBOLA!',
+        rowComplete: 'Riga Completa!',
     },
 };
 

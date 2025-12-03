@@ -2,7 +2,14 @@
 
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { useLanguage } from '@/contexts/LanguageContext';
-import { TOTAL_NUMBERS } from '@/utils/lotto';
+import { TOTAL_NUMBERS, LottoCard as LottoCardType, hasNewlyCompletedRow } from '@/utils/lotto';
+import LottoCard from './LottoCard';
+import confetti from 'canvas-confetti';
+
+interface Card {
+    id: number;
+    grid: LottoCardType;
+}
 
 interface NumberDrawerProps {
     drawnNumbers: number[];
@@ -11,6 +18,7 @@ interface NumberDrawerProps {
     setCurrentNumber: (num: number | null) => void;
     soundEnabled: boolean;
     setSoundEnabled: (enabled: boolean | ((prev: boolean) => boolean)) => void;
+    generatedCards: Card[];
 }
 
 export default function NumberDrawer({
@@ -19,12 +27,15 @@ export default function NumberDrawer({
     currentNumber,
     setCurrentNumber,
     soundEnabled,
-    setSoundEnabled
+    setSoundEnabled,
+    generatedCards
 }: NumberDrawerProps) {
     const [isAnimating, setIsAnimating] = useState(false);
     const [justDrawn, setJustDrawn] = useState<number | null>(null);
+    const [showCelebration, setShowCelebration] = useState(false);
     const audioCtxRef = useRef<AudioContext | null>(null);
     const { t } = useLanguage();
+    const previousDrawnRef = useRef<number[]>([]);
 
     // Audio Context initialisieren
     const initAudio = useCallback(() => {
@@ -54,6 +65,79 @@ export default function NumberDrawer({
         oscillator.stop(audioCtxRef.current.currentTime + duration);
     }, [soundEnabled]);
 
+    // Celebration sound - cheering melody
+    const playCelebrationSound = useCallback(() => {
+        if (!soundEnabled || !audioCtxRef.current) return;
+
+        const notes = [523.25, 659.25, 783.99, 1046.50]; // C5, E5, G5, C6
+        const duration = 0.15;
+
+        notes.forEach((frequency, index) => {
+            setTimeout(() => {
+                playSound(frequency, duration);
+            }, index * 150);
+        });
+    }, [soundEnabled, playSound]);
+
+    // Trigger confetti animation
+    const triggerConfetti = useCallback(() => {
+        const duration = 3000;
+        const animationEnd = Date.now() + duration;
+        const defaults = { startVelocity: 30, spread: 360, ticks: 60, zIndex: 9999 };
+
+        function randomInRange(min: number, max: number) {
+            return Math.random() * (max - min) + min;
+        }
+
+        const interval: NodeJS.Timeout = setInterval(function () {
+            const timeLeft = animationEnd - Date.now();
+
+            if (timeLeft <= 0) {
+                return clearInterval(interval);
+            }
+
+            const particleCount = 50 * (timeLeft / duration);
+            confetti({
+                ...defaults,
+                particleCount,
+                origin: { x: randomInRange(0.1, 0.3), y: Math.random() - 0.2 }
+            });
+            confetti({
+                ...defaults,
+                particleCount,
+                origin: { x: randomInRange(0.7, 0.9), y: Math.random() - 0.2 }
+            });
+        }, 250);
+    }, []);
+
+    // Check for row completion
+    const checkRowCompletion = useCallback((newDrawnNumbers: number[]) => {
+        if (generatedCards.length === 0) return;
+
+        const previousDrawn = previousDrawnRef.current;
+        let hasNewCompletion = false;
+
+        for (const card of generatedCards) {
+            if (hasNewlyCompletedRow(card.grid, previousDrawn, newDrawnNumbers)) {
+                hasNewCompletion = true;
+                break;
+            }
+        }
+
+        if (hasNewCompletion) {
+            setShowCelebration(true);
+            playCelebrationSound();
+            triggerConfetti();
+
+            // Hide celebration after 5 seconds
+            setTimeout(() => {
+                setShowCelebration(false);
+            }, 5000);
+        }
+
+        previousDrawnRef.current = newDrawnNumbers;
+    }, [generatedCards, playCelebrationSound, triggerConfetti]);
+
     // Zahl ziehen
     const drawNumber = useCallback(() => {
         if (drawnNumbers.length >= TOTAL_NUMBERS || isAnimating) return;
@@ -70,18 +154,22 @@ export default function NumberDrawer({
         const randomNumber = availableNumbers[Math.floor(Math.random() * availableNumbers.length)];
 
         setTimeout(() => {
+            const newDrawnNumbers = [...drawnNumbers, randomNumber];
             setCurrentNumber(randomNumber);
-            setDrawnNumbers(prev => [...prev, randomNumber]);
+            setDrawnNumbers(newDrawnNumbers);
             setJustDrawn(randomNumber);
             setIsAnimating(false);
 
             // Sound abspielen
             playSound(523.25 + (randomNumber * 5), 0.2);
 
+            // Check for row completion
+            checkRowCompletion(newDrawnNumbers);
+
             // Just-drawn Animation entfernen
             setTimeout(() => setJustDrawn(null), 500);
         }, 300);
-    }, [drawnNumbers, isAnimating, initAudio, playSound, setCurrentNumber, setDrawnNumbers]);
+    }, [drawnNumbers, isAnimating, initAudio, playSound, setCurrentNumber, setDrawnNumbers, checkRowCompletion]);
 
     // Reset mit Bestätigung
     const reset = useCallback(() => {
@@ -94,6 +182,8 @@ export default function NumberDrawer({
         setCurrentNumber(null);
         setIsAnimating(false);
         setJustDrawn(null);
+        setShowCelebration(false);
+        previousDrawnRef.current = [];
     }, [drawnNumbers.length, t.confirmRestart, setDrawnNumbers, setCurrentNumber]);
 
     // Tastatursteuerung
@@ -119,7 +209,7 @@ export default function NumberDrawer({
     const remainingNumbers = TOTAL_NUMBERS - drawnNumbers.length;
 
     return (
-        <div className="w-full max-w-4xl mx-auto space-y-6">
+        <div className="w-full max-w-6xl mx-auto space-y-6 relative">
             {/* Aktuelle Ziehung */}
             <div className="glass-panel p-6 md:p-8 text-center relative overflow-hidden">
                 <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-blue-500/50 to-transparent"></div>
@@ -238,6 +328,43 @@ export default function NumberDrawer({
                     )}
                 </div>
             </div>
+
+            {/* Playing Cards Display */}
+            {generatedCards.length > 0 && (
+                <div className="glass-panel p-6 md:p-8">
+                    <h2 className="text-center text-2xl font-bold mb-6 bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-amber-400">
+                        {t.playingCards}
+                    </h2>
+                    <div className="text-center text-sm text-slate-400 mb-4">
+                        {generatedCards.length} {generatedCards.length === 1 ? t.card : t.cards}
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 max-h-[600px] overflow-y-auto">
+                        {generatedCards.map((card) => (
+                            <LottoCard
+                                key={card.id}
+                                cardNumber={card.id}
+                                grid={card.grid}
+                                drawnNumbers={drawnNumbers}
+                                compact
+                            />
+                        ))}
+                    </div>
+                </div>
+            )}
+
+            {/* Celebration Overlay */}
+            {showCelebration && (
+                <div className="fixed inset-0 flex items-center justify-center z-[10000] pointer-events-none">
+                    <div className="bg-gradient-to-br from-amber-400 via-amber-500 to-amber-600 text-white px-16 py-12 rounded-3xl shadow-2xl border-4 border-white/30 animate-bounce">
+                        <div className="text-7xl font-black tracking-wider drop-shadow-2xl">
+                            {t.lottoWin}
+                        </div>
+                        <div className="text-2xl font-semibold mt-4 text-center text-white/90">
+                            {t.rowComplete}
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }

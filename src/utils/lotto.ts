@@ -121,3 +121,40 @@ export function generateLottoCard(): LottoCard {
 
   return card;
 }
+
+/**
+ * Checks if a specific row in a card has all its numbers drawn.
+ * A row is complete when all 5 numbers in the row are in the drawnNumbers array.
+ */
+export function isRowComplete(row: (number | null)[], drawnNumbers: number[]): boolean {
+  const rowNumbers = row.filter((num): num is number => num !== null);
+  return rowNumbers.length === 5 && rowNumbers.every(num => drawnNumbers.includes(num));
+}
+
+/**
+ * Returns indices of all completed rows in a card.
+ * Returns an array of row indices (0, 1, 2) that are complete.
+ */
+export function getCompletedRows(card: LottoCard, drawnNumbers: number[]): number[] {
+  const completedRows: number[] = [];
+  for (let i = 0; i < card.length; i++) {
+    if (isRowComplete(card[i], drawnNumbers)) {
+      completedRows.push(i);
+    }
+  }
+  return completedRows;
+}
+
+/**
+ * Checks if any card has a newly completed row.
+ * Returns true if the last drawn number completed a row that wasn't complete before.
+ */
+export function hasNewlyCompletedRow(
+  card: LottoCard,
+  previousDrawnNumbers: number[],
+  currentDrawnNumbers: number[]
+): boolean {
+  const previousCompletedRows = getCompletedRows(card, previousDrawnNumbers);
+  const currentCompletedRows = getCompletedRows(card, currentDrawnNumbers);
+  return currentCompletedRows.length > previousCompletedRows.length;
+}
