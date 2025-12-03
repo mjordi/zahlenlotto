@@ -143,7 +143,7 @@ export function generatePdf(cards: Card[], t: Translations, config: PdfConfig): 
         }
 
         const totalCardsText = cards.length;
-        pdf.save(`${t.pdfTitle.toLowerCase()}_${totalCardsText}_${t.cards.toLowerCase()}.pdf`);
+        pdf.save(`${t.pdfFilename}_${totalCardsText}.pdf`);
     } catch (error) {
         console.error('Fehler beim PDF-Export:', error);
         alert('Fehler beim Erstellen der PDF-Datei');

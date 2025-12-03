@@ -35,7 +35,7 @@ export default function Home() {
         <main className="min-h-screen p-4 md:p-8 pb-20">
             <div className="max-w-6xl mx-auto relative">
                 {/* Theme and Language Selectors - Absolute position above headline */}
-                <div className="absolute top-0 right-0 z-50 flex items-center gap-3">
+                <div className="absolute top-0 right-0 z-50 flex items-center gap-2 md:gap-3">
                     <ThemeToggle />
                     <div className="relative">
                         <button
@@ -97,11 +97,11 @@ export default function Home() {
                     </div>
                 </div>
 
-                <header className="text-center mb-12 pt-8">
-                    <h1 className="text-4xl md:text-6xl font-black mb-4 bg-clip-text text-transparent bg-gradient-to-r from-blue-400 via-purple-400 to-amber-400 filter drop-shadow-lg">
+                <header className="text-center mb-12 pt-16 md:pt-8">
+                    <h1 className="text-3xl md:text-6xl font-black mb-4 bg-clip-text text-transparent bg-gradient-to-r from-blue-400 via-purple-400 to-amber-400 filter drop-shadow-lg px-2">
                         {t.appTitle}
                     </h1>
-                    <p className="text-slate-400 text-lg">{t.appSubtitle}</p>
+                    <p className="text-lg px-2" style={{ color: 'var(--text-muted)' }}>{t.appSubtitle}</p>
                 </header>
 
                 <div className="transition-all duration-500 ease-in-out">
