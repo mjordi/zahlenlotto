@@ -5,6 +5,7 @@ import { useLanguage } from '@/contexts/LanguageContext';
 import { TOTAL_NUMBERS, LottoCard as LottoCardType, hasNewlyCompletedRow, generateLottoCard } from '@/utils/lotto';
 import LottoCard from './LottoCard';
 import confetti from 'canvas-confetti';
+import { generatePdf } from '@/utils/pdfGenerator';
 
 interface Card {
     id: number;
@@ -42,6 +43,8 @@ export default function NumberDrawer({
     // Card generation state
     const [totalCards, setTotalCards] = useState(10);
     const [isGenerating, setIsGenerating] = useState(false);
+    const [cardsPerPage, setCardsPerPage] = useState(3);
+    const [isExporting, setIsExporting] = useState(false);
 
     // Audio Context initialisieren
     const initAudio = useCallback(() => {
@@ -230,6 +233,19 @@ export default function NumberDrawer({
         }, 100);
     }, [totalCards, setGeneratedCards]);
 
+    // Export to PDF function
+    const exportToPDF = useCallback(() => {
+        if (generatedCards.length === 0) return;
+
+        setIsExporting(true);
+
+        // Allow UI to update before blocking with PDF generation
+        setTimeout(() => {
+            generatePdf(generatedCards, t, { cardsPerPage });
+            setIsExporting(false);
+        }, 10);
+    }, [generatedCards, cardsPerPage, t]);
+
     return (
         <div className="w-full max-w-6xl mx-auto space-y-6 relative">
             {/* Aktuelle Ziehung */}
@@ -341,6 +357,33 @@ export default function NumberDrawer({
                             <div className="text-center text-sm text-slate-400 mb-4">
                                 {generatedCards.length} {generatedCards.length === 1 ? t.card : t.cards}
                             </div>
+
+                            {/* PDF Export Controls */}
+                            <div className="mb-4 flex gap-3 items-center justify-center">
+                                <div className="flex items-center gap-2">
+                                    <label className="text-xs font-medium text-slate-400">
+                                        {t.cardsPerPage}:
+                                    </label>
+                                    <select
+                                        value={cardsPerPage}
+                                        onChange={(e) => setCardsPerPage(parseInt(e.target.value))}
+                                        className="input-field text-sm py-1 px-2 bg-slate-800 border-white/10"
+                                    >
+                                        <option value="2" className="bg-slate-800">2</option>
+                                        <option value="3" className="bg-slate-800">3</option>
+                                        <option value="4" className="bg-slate-800">4</option>
+                                        <option value="5" className="bg-slate-800">5</option>
+                                    </select>
+                                </div>
+                                <button
+                                    onClick={exportToPDF}
+                                    disabled={isExporting}
+                                    className="px-4 py-1 bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-semibold rounded-lg transition-all duration-300 shadow-lg shadow-emerald-500/20 hover:shadow-emerald-500/40 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
+                                >
+                                    {isExporting ? t.creatingPdf : t.downloadPdf}
+                                </button>
+                            </div>
+
                             <div className="grid grid-cols-2 gap-3 max-h-[600px] overflow-y-auto">
                                 {generatedCards.map((card) => (
                                     <LottoCard
