@@ -2,7 +2,7 @@
 
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { useLanguage } from '@/contexts/LanguageContext';
-import { TOTAL_NUMBERS, LottoCard as LottoCardType, hasNewlyCompletedRow } from '@/utils/lotto';
+import { TOTAL_NUMBERS, LottoCard as LottoCardType, hasNewlyCompletedRow, generateLottoCard } from '@/utils/lotto';
 import LottoCard from './LottoCard';
 import confetti from 'canvas-confetti';
 
@@ -19,6 +19,7 @@ interface NumberDrawerProps {
     soundEnabled: boolean;
     setSoundEnabled: (enabled: boolean | ((prev: boolean) => boolean)) => void;
     generatedCards: Card[];
+    setGeneratedCards: (cards: Card[]) => void;
 }
 
 export default function NumberDrawer({
@@ -28,7 +29,8 @@ export default function NumberDrawer({
     setCurrentNumber,
     soundEnabled,
     setSoundEnabled,
-    generatedCards
+    generatedCards,
+    setGeneratedCards
 }: NumberDrawerProps) {
     const [isAnimating, setIsAnimating] = useState(false);
     const [justDrawn, setJustDrawn] = useState<number | null>(null);
@@ -36,6 +38,10 @@ export default function NumberDrawer({
     const audioCtxRef = useRef<AudioContext | null>(null);
     const { t } = useLanguage();
     const previousDrawnRef = useRef<number[]>([]);
+
+    // Card generation state
+    const [totalCards, setTotalCards] = useState(10);
+    const [isGenerating, setIsGenerating] = useState(false);
 
     // Audio Context initialisieren
     const initAudio = useCallback(() => {
@@ -208,6 +214,22 @@ export default function NumberDrawer({
     const isNumberDrawn = (num: number) => drawnNumbers.includes(num);
     const remainingNumbers = TOTAL_NUMBERS - drawnNumbers.length;
 
+    // Generate cards function
+    const generateCards = useCallback(() => {
+        setIsGenerating(true);
+        setTimeout(() => {
+            const cards: Card[] = [];
+            for (let i = 0; i < totalCards; i++) {
+                cards.push({
+                    id: i + 1,
+                    grid: generateLottoCard(),
+                });
+            }
+            setGeneratedCards(cards);
+            setIsGenerating(false);
+        }, 100);
+    }, [totalCards, setGeneratedCards]);
+
     return (
         <div className="w-full max-w-6xl mx-auto space-y-6 relative">
             {/* Aktuelle Ziehung */}
@@ -333,25 +355,31 @@ export default function NumberDrawer({
                         </>
                     ) : (
                         <div className="flex flex-col items-center justify-center h-full min-h-[400px]">
-                            <div className="text-center mb-8">
-                                <div className="text-6xl mb-4">🎴</div>
-                                <h3 className="text-2xl font-bold mb-2 bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-amber-400">
-                                    {t.tabGenerateCards}
-                                </h3>
-                                <p className="text-slate-400 text-sm">
-                                    {t.cardDescription}
-                                </p>
-                            </div>
-                            <button
-                                onClick={() => {
-                                    // Switch to generate tab
-                                    const event = new CustomEvent('switchToGenerateTab');
-                                    window.dispatchEvent(event);
-                                }}
-                                className="px-8 py-4 bg-amber-600 hover:bg-amber-500 text-white font-semibold rounded-xl transition-all duration-300 shadow-lg shadow-amber-500/20 hover:shadow-amber-500/40 active:scale-95"
-                            >
+                            <h3 className="text-2xl font-bold mb-6 bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-amber-400">
                                 {t.tabGenerateCards}
-                            </button>
+                            </h3>
+                            <div className="w-full max-w-sm space-y-4">
+                                <div>
+                                    <label className="block text-sm font-medium text-slate-300 mb-2">
+                                        {t.totalCards}
+                                    </label>
+                                    <input
+                                        type="number"
+                                        min="1"
+                                        max="99"
+                                        value={totalCards}
+                                        onChange={(e) => setTotalCards(Math.min(99, Math.max(1, parseInt(e.target.value) || 1)))}
+                                        className="input-field w-full"
+                                    />
+                                </div>
+                                <button
+                                    onClick={generateCards}
+                                    disabled={isGenerating}
+                                    className="w-full px-6 py-3 bg-amber-600 hover:bg-amber-500 text-white font-semibold rounded-xl transition-all duration-300 shadow-lg shadow-amber-500/20 hover:shadow-amber-500/40 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
+                                >
+                                    {isGenerating ? t.generating : t.generateCards}
+                                </button>
+                            </div>
                         </div>
                     )}
                 </div>

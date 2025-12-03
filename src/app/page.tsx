@@ -1,13 +1,12 @@
 'use client';
 
-import { useState, lazy, Suspense, useEffect } from 'react';
+import { useState, lazy, Suspense } from 'react';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { SUPPORTED_LANGUAGES } from '@/utils/translations';
 import { LottoCard } from '@/utils/lotto';
 
 // Lazy load heavy components to reduce initial bundle
 const NumberDrawer = lazy(() => import('@/components/NumberDrawer'));
-const CardGenerator = lazy(() => import('@/components/CardGenerator'));
 
 interface Card {
     id: number;
@@ -15,31 +14,19 @@ interface Card {
 }
 
 export default function Home() {
-    const [activeTab, setActiveTab] = useState<'draw' | 'generate'>('draw');
     const { language, setLanguage, t } = useLanguage();
     const [isLanguageOpen, setIsLanguageOpen] = useState(false);
 
-    // Lifted state for NumberDrawer to persist across tab switches
+    // Lifted state for NumberDrawer
     const [drawnNumbers, setDrawnNumbers] = useState<number[]>([]);
     const [currentNumber, setCurrentNumber] = useState<number | null>(null);
     const [soundEnabled, setSoundEnabled] = useState(true);
-
-    // Lifted state for generated cards to share between tabs
     const [generatedCards, setGeneratedCards] = useState<Card[]>([]);
 
     const languages = SUPPORTED_LANGUAGES.map(lang => ({
         ...lang,
         label: t[lang.labelKey]
     }));
-
-    // Listen for tab switch event from NumberDrawer
-    useEffect(() => {
-        const handleSwitchTab = () => {
-            setActiveTab('generate');
-        };
-        window.addEventListener('switchToGenerateTab', handleSwitchTab);
-        return () => window.removeEventListener('switchToGenerateTab', handleSwitchTab);
-    }, []);
 
     return (
         <main className="min-h-screen p-4 md:p-8 pb-20">
@@ -89,29 +76,6 @@ export default function Home() {
                     <p className="text-slate-400 text-lg">{t.appSubtitle}</p>
                 </header>
 
-                <div className="flex justify-center mb-10">
-                    <div className="bg-slate-900/50 p-1 rounded-2xl border border-white/10 backdrop-blur-sm inline-flex">
-                        <button
-                            onClick={() => setActiveTab('draw')}
-                            className={`px-8 py-3 rounded-xl font-semibold transition-all duration-300 ${activeTab === 'draw'
-                                ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/25'
-                                : 'text-slate-400 hover:text-white hover:bg-white/5'
-                                }`}
-                        >
-                            {t.tabDrawNumbers}
-                        </button>
-                        <button
-                            onClick={() => setActiveTab('generate')}
-                            className={`px-8 py-3 rounded-xl font-semibold transition-all duration-300 ${activeTab === 'generate'
-                                ? 'bg-amber-500 text-white shadow-lg shadow-amber-500/25'
-                                : 'text-slate-400 hover:text-white hover:bg-white/5'
-                                }`}
-                        >
-                            {t.tabGenerateCards}
-                        </button>
-                    </div>
-                </div>
-
                 <div className="transition-all duration-500 ease-in-out">
                     <Suspense fallback={
                         <div className="glass-panel p-8 text-center">
@@ -119,22 +83,16 @@ export default function Home() {
                             <p className="mt-4 text-slate-400">Loading...</p>
                         </div>
                     }>
-                        {activeTab === 'draw' ? (
-                            <NumberDrawer
-                                drawnNumbers={drawnNumbers}
-                                setDrawnNumbers={setDrawnNumbers}
-                                currentNumber={currentNumber}
-                                setCurrentNumber={setCurrentNumber}
-                                soundEnabled={soundEnabled}
-                                setSoundEnabled={setSoundEnabled}
-                                generatedCards={generatedCards}
-                            />
-                        ) : (
-                            <CardGenerator
-                                generatedCards={generatedCards}
-                                setGeneratedCards={setGeneratedCards}
-                            />
-                        )}
+                        <NumberDrawer
+                            drawnNumbers={drawnNumbers}
+                            setDrawnNumbers={setDrawnNumbers}
+                            currentNumber={currentNumber}
+                            setCurrentNumber={setCurrentNumber}
+                            soundEnabled={soundEnabled}
+                            setSoundEnabled={setSoundEnabled}
+                            generatedCards={generatedCards}
+                            setGeneratedCards={setGeneratedCards}
+                        />
                     </Suspense>
                 </div>
             </div>
