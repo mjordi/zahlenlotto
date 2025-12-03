@@ -414,7 +414,7 @@ export default function NumberDrawer({
                                 </button>
                             </div>
 
-                            <div className="grid grid-cols-2 gap-3 max-h-[600px] overflow-y-auto">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-h-[600px] overflow-y-auto">
                                 {generatedCards.map((card) => (
                                     <LottoCard
                                         key={card.id}
@@ -462,7 +462,7 @@ export default function NumberDrawer({
                                         />
                                     </div>
                                 </div>
-                                <div className="space-y-2 max-h-[200px] overflow-y-auto">
+                                <div className="space-y-2 max-h-[350px] overflow-y-auto">
                                     {Array.from({ length: numberOfPlayers }, (_, i) => (
                                         <div key={i}>
                                             <label className="block text-xs font-medium text-slate-400 mb-1">

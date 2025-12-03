@@ -49,7 +49,7 @@ describe('LottoCard', () => {
       <LottoCard cardNumber={1} grid={mockCard} compact />
     );
 
-    const cardElement = container.querySelector('.text-\\[9px\\]');
+    const cardElement = container.querySelector('.text-\\[11px\\]');
     expect(cardElement).toBeInTheDocument();
   });
 
@@ -58,7 +58,7 @@ describe('LottoCard', () => {
       <LottoCard cardNumber={1} grid={mockCard} compact={false} />
     );
 
-    const cardElement = container.querySelector('.text-\\[9px\\]');
+    const cardElement = container.querySelector('.text-\\[11px\\]');
     expect(cardElement).not.toBeInTheDocument();
   });
 
