@@ -3,6 +3,7 @@
 import { useState, lazy, Suspense } from 'react';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { SUPPORTED_LANGUAGES } from '@/utils/translations';
+import ThemeToggle from '@/components/ThemeToggle';
 
 // Lazy load heavy components to reduce initial bundle
 const NumberDrawer = lazy(() => import('@/components/NumberDrawer'));
@@ -26,8 +27,9 @@ export default function Home() {
     return (
         <main className="min-h-screen p-4 md:p-8 pb-20">
             <div className="max-w-6xl mx-auto relative">
-                {/* Language Selector - Absolute position above headline */}
-                <div className="absolute top-0 right-0 z-50">
+                {/* Theme and Language Selectors - Absolute position above headline */}
+                <div className="absolute top-0 right-0 z-50 flex gap-2">
+                    <ThemeToggle />
                     <div className="relative">
                         <button
                             onClick={() => setIsLanguageOpen(!isLanguageOpen)}
@@ -68,16 +70,16 @@ export default function Home() {
                     <h1 className="text-4xl md:text-6xl font-black mb-4 bg-clip-text text-transparent bg-gradient-to-r from-blue-400 via-purple-400 to-amber-400 filter drop-shadow-lg">
                         {t.appTitle}
                     </h1>
-                    <p className="text-slate-400 text-lg">{t.appSubtitle}</p>
+                    <p className="text-muted text-lg">{t.appSubtitle}</p>
                 </header>
 
                 <div className="flex justify-center mb-10">
-                    <div className="bg-slate-900/50 p-1 rounded-2xl border border-white/10 backdrop-blur-sm inline-flex">
+                    <div className="tab-container p-1 rounded-2xl backdrop-blur-sm inline-flex">
                         <button
                             onClick={() => setActiveTab('draw')}
                             className={`px-8 py-3 rounded-xl font-semibold transition-all duration-300 ${activeTab === 'draw'
                                 ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/25'
-                                : 'text-slate-400 hover:text-white hover:bg-white/5'
+                                : 'tab-inactive'
                                 }`}
                         >
                             {t.tabDrawNumbers}
@@ -86,7 +88,7 @@ export default function Home() {
                             onClick={() => setActiveTab('generate')}
                             className={`px-8 py-3 rounded-xl font-semibold transition-all duration-300 ${activeTab === 'generate'
                                 ? 'bg-amber-500 text-white shadow-lg shadow-amber-500/25'
-                                : 'text-slate-400 hover:text-white hover:bg-white/5'
+                                : 'tab-inactive'
                                 }`}
                         >
                             {t.tabGenerateCards}
@@ -98,7 +100,7 @@ export default function Home() {
                     <Suspense fallback={
                         <div className="glass-panel p-8 text-center">
                             <div className="inline-block animate-spin rounded-full h-12 w-12 border-4 border-blue-500/20 border-t-blue-500"></div>
-                            <p className="mt-4 text-slate-400">Loading...</p>
+                            <p className="mt-4 text-muted">Loading...</p>
                         </div>
                     }>
                         {activeTab === 'draw' ? (

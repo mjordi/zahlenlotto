@@ -72,6 +72,11 @@ export interface Translations {
     languageFrench: string;
     languageItalian: string;
     selectLanguage: string;
+
+    // Theme
+    lightMode: string;
+    darkMode: string;
+    themeToggle: string;
 }
 
 export const translations: Record<Language, Translations> = {
@@ -140,6 +145,11 @@ export const translations: Record<Language, Translations> = {
         languageFrench: 'Français',
         languageItalian: 'Italiano',
         selectLanguage: 'Sprache wählen',
+
+        // Theme
+        lightMode: 'Hell',
+        darkMode: 'Dunkel',
+        themeToggle: 'Thema wechseln',
     },
 
     en: {
@@ -207,6 +217,11 @@ export const translations: Record<Language, Translations> = {
         languageFrench: 'Français',
         languageItalian: 'Italiano',
         selectLanguage: 'Select language',
+
+        // Theme
+        lightMode: 'Light',
+        darkMode: 'Dark',
+        themeToggle: 'Toggle theme',
     },
 
     fr: {
@@ -274,6 +289,11 @@ export const translations: Record<Language, Translations> = {
         languageFrench: 'Français',
         languageItalian: 'Italiano',
         selectLanguage: 'Choisir la langue',
+
+        // Theme
+        lightMode: 'Clair',
+        darkMode: 'Sombre',
+        themeToggle: 'Changer le thème',
     },
 
     it: {
@@ -341,6 +361,11 @@ export const translations: Record<Language, Translations> = {
         languageFrench: 'Français',
         languageItalian: 'Italiano',
         selectLanguage: 'Seleziona lingua',
+
+        // Theme
+        lightMode: 'Chiaro',
+        darkMode: 'Scuro',
+        themeToggle: 'Cambia tema',
     },
 };
 
