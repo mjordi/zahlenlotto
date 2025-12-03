@@ -54,7 +54,7 @@ export default function CardGenerator() {
 
                 <div className="grid md:grid-cols-2 gap-6">
                     <div>
-                        <label className="block text-sm font-medium text-slate-300 mb-2">
+                        <label className="block text-sm font-medium label-text mb-2">
                             {t.totalCards}
                         </label>
                         <input
@@ -65,13 +65,13 @@ export default function CardGenerator() {
                             onChange={(e) => setTotalCards(Math.min(99, Math.max(1, parseInt(e.target.value) || 1)))}
                             className="input-field w-full"
                         />
-                        <p className="text-xs text-slate-500 mt-1">
+                        <p className="text-xs description-text mt-1">
                             {t.cardDescription}
                         </p>
                     </div>
 
                     <div>
-                        <label className="block text-sm font-medium text-slate-300 mb-2">
+                        <label className="block text-sm font-medium label-text mb-2">
                             {t.cardsPerPage}
                         </label>
                         <select
@@ -79,10 +79,10 @@ export default function CardGenerator() {
                             onChange={(e) => setCardsPerPage(parseInt(e.target.value))}
                             className="input-field w-full appearance-none cursor-pointer"
                         >
-                            <option value="2" className="bg-slate-800">2 {t.cards}</option>
-                            <option value="3" className="bg-slate-800">3 {t.cards}</option>
-                            <option value="4" className="bg-slate-800">4 {t.cards}</option>
-                            <option value="5" className="bg-slate-800">5 {t.cards}</option>
+                            <option value="2" className="select-option">2 {t.cards}</option>
+                            <option value="3" className="select-option">3 {t.cards}</option>
+                            <option value="4" className="select-option">4 {t.cards}</option>
+                            <option value="5" className="select-option">5 {t.cards}</option>
                         </select>
                     </div>
                 </div>
@@ -112,7 +112,7 @@ export default function CardGenerator() {
             {generatedCards.length > 0 && (
                 <div className="glass-panel p-6 md:p-8">
                     <h2 className="text-center text-2xl font-bold mb-6 bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-amber-400">{t.preview}</h2>
-                    <div className="text-center text-sm text-slate-400 mb-4">
+                    <div className="text-center text-sm text-muted mb-4">
                         {generatedCards.length} {generatedCards.length === 1 ? t.card : t.cards} {t.cardsGenerated}
                     </div>
 
@@ -128,7 +128,7 @@ export default function CardGenerator() {
                     </div>
 
                     {generatedCards.length > 12 && (
-                        <p className="text-center text-slate-500 mt-4">
+                        <p className="text-center description-text mt-4">
                             {t.moreCards} {generatedCards.length - 12} {t.cards}
                         </p>
                     )}
