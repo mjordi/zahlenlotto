@@ -19,14 +19,25 @@ export default function LottoCard({ cardNumber, grid, compact, drawnNumbers = []
     };
 
     return (
-        <div className={`border border-white/10 rounded-lg p-4 bg-slate-900/50 shadow-inner ${compact ? 'text-xs' : ''}`}>
+        <div
+            className={`rounded-lg p-4 shadow-inner ${compact ? 'text-xs' : ''}`}
+            style={{
+                border: `1px solid var(--lotto-card-border)`,
+                background: 'var(--lotto-card-bg)'
+            }}
+        >
             <div className="flex items-center justify-between mb-2">
-                <div className="text-blue-400 font-bold">{t.card} {cardNumber}</div>
+                <div className="text-blue-500 font-bold">{t.card} {cardNumber}</div>
                 {playerName && (
-                    <div className="text-amber-400 font-semibold text-xs">{playerName}</div>
+                    <div className="text-amber-500 font-semibold text-xs">{playerName}</div>
                 )}
             </div>
-            <div className="grid grid-rows-3 gap-0 border border-white/20 bg-slate-800">
+            <div
+                className="grid grid-rows-3 gap-0"
+                style={{
+                    border: `1px solid var(--lotto-card-border)`
+                }}
+            >
                 {grid.map((row, rowIndex) => {
                     const isRowCompleted = completedRows.includes(rowIndex);
                     return (
@@ -45,11 +56,25 @@ export default function LottoCard({ cardNumber, grid, compact, drawnNumbers = []
                                             ${compact ? 'text-[11px] sm:text-xs' : ''}
                                             ${num !== null
                                                 ? drawn
-                                                    ? 'font-bold text-white bg-emerald-600 shadow-inner border border-white/10'
-                                                    : 'font-bold text-slate-900 bg-white border border-slate-300'
-                                                : 'bg-slate-800/50 border border-white/10'
+                                                    ? 'font-bold text-white bg-emerald-600 shadow-inner'
+                                                    : 'font-bold'
+                                                : ''
                                             }
                                         `}
+                                        style={
+                                            num !== null
+                                                ? drawn
+                                                    ? { border: '1px solid rgba(255, 255, 255, 0.1)' }
+                                                    : {
+                                                        background: 'var(--lotto-cell-bg)',
+                                                        color: 'var(--lotto-cell-text)',
+                                                        border: `1px solid var(--lotto-card-border)`
+                                                    }
+                                                : {
+                                                    background: 'var(--lotto-cell-empty)',
+                                                    border: `1px solid var(--lotto-card-border)`
+                                                }
+                                        }
                                     >
                                         {num}
                                     </div>

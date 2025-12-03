@@ -82,6 +82,10 @@ export interface Translations {
     numberOfPlayers: string;
     cardsPerPlayer: string;
     playerLabel: string;
+
+    // Theme
+    switchToLightMode: string;
+    switchToDarkMode: string;
 }
 
 export const translations: Record<Language, Translations> = {
@@ -160,6 +164,10 @@ export const translations: Record<Language, Translations> = {
         numberOfPlayers: 'Anzahl Spieler',
         cardsPerPlayer: 'Karten pro Spieler',
         playerLabel: 'Spieler',
+
+        // Theme
+        switchToLightMode: 'Zu hellem Modus wechseln',
+        switchToDarkMode: 'Zu dunklem Modus wechseln',
     },
 
     en: {
@@ -237,6 +245,10 @@ export const translations: Record<Language, Translations> = {
         numberOfPlayers: 'Number of Players',
         cardsPerPlayer: 'Cards per Player',
         playerLabel: 'Player',
+
+        // Theme
+        switchToLightMode: 'Switch to light mode',
+        switchToDarkMode: 'Switch to dark mode',
     },
 
     fr: {
@@ -314,6 +326,10 @@ export const translations: Record<Language, Translations> = {
         numberOfPlayers: 'Nombre de Joueurs',
         cardsPerPlayer: 'Cartes par Joueur',
         playerLabel: 'Joueur',
+
+        // Theme
+        switchToLightMode: 'Passer au mode clair',
+        switchToDarkMode: 'Passer au mode sombre',
     },
 
     it: {
@@ -391,6 +407,10 @@ export const translations: Record<Language, Translations> = {
         numberOfPlayers: 'Numero di Giocatori',
         cardsPerPlayer: 'Cartelle per Giocatore',
         playerLabel: 'Giocatore',
+
+        // Theme
+        switchToLightMode: 'Passa alla modalità chiara',
+        switchToDarkMode: 'Passa alla modalità scura',
     },
 };
 

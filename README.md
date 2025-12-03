@@ -29,10 +29,13 @@ A modern web application for generating traditional 90-number Tombola/Bingo card
 - Italian (Italiano) 🇮🇹
 
 ### 🎨 Modern UI/UX
-- Dark mode design with glass morphism effects
+- **Light/Dark mode with system preference detection**
+- **Manual theme toggle for user preference**
+- Glass morphism effects
 - Responsive layout (mobile, tablet, desktop)
 - Smooth animations and transitions
 - Accessible keyboard navigation
+- Optimized contrast for all elements in both themes
 
 ## How to Play
 
@@ -113,9 +116,12 @@ zahlenlotto/
 │   │   ├── CardGenerator.tsx
 │   │   ├── NumberDrawer.tsx
 │   │   ├── LottoCard.tsx
+│   │   ├── ThemeToggle.tsx
 │   │   └── __tests__/    # Component tests
 │   ├── contexts/         # React contexts
-│   │   └── LanguageContext.tsx
+│   │   ├── LanguageContext.tsx
+│   │   ├── ThemeContext.tsx
+│   │   └── __tests__/    # Context tests
 │   └── utils/            # Utility functions
 │       ├── lotto.ts      # Card generation & row completion logic
 │       ├── translations.ts

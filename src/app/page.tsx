@@ -4,6 +4,7 @@ import { useState, lazy, Suspense } from 'react';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { SUPPORTED_LANGUAGES } from '@/utils/translations';
 import { LottoCard } from '@/utils/lotto';
+import ThemeToggle from '@/components/ThemeToggle';
 
 // Lazy load heavy components to reduce initial bundle
 const NumberDrawer = lazy(() => import('@/components/NumberDrawer'));
@@ -33,8 +34,9 @@ export default function Home() {
     return (
         <main className="min-h-screen p-4 md:p-8 pb-20">
             <div className="max-w-6xl mx-auto relative">
-                {/* Language Selector - Absolute position above headline */}
-                <div className="absolute top-0 right-0 z-50">
+                {/* Theme and Language Selectors - Absolute position above headline */}
+                <div className="absolute top-0 right-0 z-50 flex items-center gap-3">
+                    <ThemeToggle />
                     <div className="relative">
                         <button
                             onClick={() => setIsLanguageOpen(!isLanguageOpen)}
@@ -42,6 +44,11 @@ export default function Home() {
                             aria-expanded={isLanguageOpen}
                             aria-haspopup="true"
                             className="bg-slate-800/95 backdrop-blur-md border border-white/30 rounded-xl px-4 py-3 text-white text-base font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 transition-all cursor-pointer hover:bg-slate-700/95 hover:border-white/40 shadow-xl flex items-center gap-2"
+                            style={{
+                                background: 'var(--glass-bg)',
+                                borderColor: 'var(--glass-border)',
+                                color: 'var(--foreground)'
+                            }}
                         >
                             <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-5 h-5" aria-hidden="true">
                                 <circle cx="12" cy="12" r="10"></circle>
@@ -51,7 +58,13 @@ export default function Home() {
                         </button>
 
                         {isLanguageOpen && (
-                            <div className="absolute top-full mt-2 right-0 bg-slate-800/95 backdrop-blur-md border border-white/30 rounded-xl shadow-xl overflow-hidden min-w-[160px]">
+                            <div
+                                className="absolute top-full mt-2 right-0 bg-slate-800/95 backdrop-blur-md border border-white/30 rounded-xl shadow-xl overflow-hidden min-w-[160px]"
+                                style={{
+                                    background: 'var(--glass-bg)',
+                                    borderColor: 'var(--glass-border)'
+                                }}
+                            >
                                 {languages.map((lang) => (
                                     <button
                                         key={lang.code}
@@ -59,11 +72,24 @@ export default function Home() {
                                             setLanguage(lang.code);
                                             setIsLanguageOpen(false);
                                         }}
-                                        className={`w-full px-4 py-3 text-left hover:bg-slate-700/95 transition-colors flex items-center gap-2 ${language === lang.code ? 'bg-slate-700/50' : ''
-                                            }`}
+                                        className={`w-full px-4 py-3 text-left transition-colors flex items-center gap-2`}
+                                        style={{
+                                            backgroundColor: language === lang.code ? 'var(--btn-secondary-hover)' : 'transparent',
+                                            color: 'var(--foreground)'
+                                        }}
+                                        onMouseEnter={(e) => {
+                                            if (language !== lang.code) {
+                                                e.currentTarget.style.backgroundColor = 'var(--btn-secondary-bg)';
+                                            }
+                                        }}
+                                        onMouseLeave={(e) => {
+                                            if (language !== lang.code) {
+                                                e.currentTarget.style.backgroundColor = 'transparent';
+                                            }
+                                        }}
                                     >
                                         <span>{lang.flag}</span>
-                                        <span className="text-white text-base">{lang.label}</span>
+                                        <span className="text-base">{lang.label}</span>
                                     </button>
                                 ))}
                             </div>
