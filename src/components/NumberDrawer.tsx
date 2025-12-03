@@ -45,7 +45,7 @@ export default function NumberDrawer({
     // Card generation state
     const [numberOfPlayers, setNumberOfPlayers] = useState(2);
     const [cardsPerPlayer, setCardsPerPlayer] = useState(3);
-    const [playerNames, setPlayerNames] = useState<string[]>(['Spieler 1', 'Spieler 2']);
+    const [playerNames, setPlayerNames] = useState<string[]>([]);
     const [isGenerating, setIsGenerating] = useState(false);
     const [cardsPerPage, setCardsPerPage] = useState(3);
     const [isExporting, setIsExporting] = useState(false);
@@ -227,7 +227,7 @@ export default function NumberDrawer({
         setPlayerNames(prev => {
             const newNames = [...prev];
             while (newNames.length < numberOfPlayers) {
-                newNames.push(`Spieler ${newNames.length + 1}`);
+                newNames.push('');
             }
             return newNames.slice(0, numberOfPlayers);
         });
@@ -248,14 +248,14 @@ export default function NumberDrawer({
                         id: cardId++,
                         grid: generateLottoCard(),
                         playerId: playerId,
-                        playerName: playerNames[playerId] || `Spieler ${playerId + 1}`,
+                        playerName: playerNames[playerId]?.trim() || `${t.playerLabel} ${playerId + 1}`,
                     });
                 }
             }
             setGeneratedCards(cards);
             setIsGenerating(false);
         }, 100);
-    }, [numberOfPlayers, cardsPerPlayer, playerNames, setGeneratedCards]);
+    }, [numberOfPlayers, cardsPerPlayer, playerNames, t.playerLabel, setGeneratedCards]);
 
     // Export to PDF function
     const exportToPDF = useCallback(() => {
@@ -325,166 +325,163 @@ export default function NumberDrawer({
                 </div>
             </div>
 
-            {/* Two Column Layout: Numbers Overview and Playing Cards */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                {/* Zahlenübersicht */}
+            {/* Playing Cards Display or Generate Cards Prompt */}
+            {generatedCards.length > 0 ? (
                 <div className="glass-panel p-6 md:p-8">
                     <h2 className="text-center text-2xl font-bold mb-6 bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-amber-400">
-                        {t.allNumbersOverview}
+                        {t.playingCards}
                     </h2>
-
-                    {/* Zahlen Grid */}
-                    <div className="grid grid-cols-10 gap-2 mb-8">
-                        {Array.from({ length: TOTAL_NUMBERS }, (_, i) => i + 1).map(num => {
-                            const drawn = isNumberDrawn(num);
-                            const isJustDrawn = num === justDrawn;
-
-                            return (
-                                <div
-                                    key={num}
-                                    className={`
-                  aspect-square flex items-center justify-center rounded-lg font-semibold text-sm md:text-base
-                  transition-all duration-500 border
-                  ${drawn
-                                            ? 'bg-gradient-to-br from-emerald-500 to-emerald-700 text-white border-emerald-400/50 shadow-lg shadow-emerald-500/20 scale-105'
-                                            : 'bg-slate-800/30 text-slate-600 border-white/5'
-                                        }
-                  ${isJustDrawn ? 'animate-bounce scale-125 z-10' : ''}
-                `}
-                                >
-                                    {num}
-                                </div>
-                            );
-                        })}
+                    <div className="text-center text-sm text-slate-400 mb-4">
+                        {generatedCards.length} {generatedCards.length === 1 ? t.card : t.cards}
                     </div>
 
-                    {/* Statistik */}
-                    <div className="flex justify-center gap-12 flex-wrap border-t border-white/5 pt-6">
-                        <div className="text-center">
-                            <div className="text-3xl font-bold text-blue-400">{drawnNumbers.length}</div>
-                            <div className="text-slate-500 text-sm uppercase tracking-wider font-medium">{t.drawn}</div>
+                    {/* PDF Export Controls */}
+                    <div className="mb-4 flex gap-3 items-center justify-center">
+                        <div className="flex items-center gap-2">
+                            <label className="text-xs font-medium text-slate-400">
+                                {t.cardsPerPage}:
+                            </label>
+                            <select
+                                value={cardsPerPage}
+                                onChange={(e) => setCardsPerPage(parseInt(e.target.value))}
+                                className="input-field text-sm py-1 px-2 bg-slate-800 border-white/10"
+                            >
+                                <option value="2" className="bg-slate-800">2</option>
+                                <option value="3" className="bg-slate-800">3</option>
+                                <option value="4" className="bg-slate-800">4</option>
+                                <option value="5" className="bg-slate-800">5</option>
+                            </select>
                         </div>
-                        <div className="text-center">
-                            <div className="text-3xl font-bold text-slate-400">{remainingNumbers}</div>
-                            <div className="text-slate-500 text-sm uppercase tracking-wider font-medium">{t.remaining}</div>
+                        <button
+                            onClick={exportToPDF}
+                            disabled={isExporting}
+                            className="px-4 py-1 bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-semibold rounded-lg transition-all duration-300 shadow-lg shadow-emerald-500/20 hover:shadow-emerald-500/40 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                            {isExporting ? t.creatingPdf : t.downloadPdf}
+                        </button>
+                    </div>
+
+                    <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 max-h-[600px] overflow-y-auto">
+                        {generatedCards.map((card) => (
+                            <LottoCard
+                                key={card.id}
+                                cardNumber={card.id}
+                                grid={card.grid}
+                                drawnNumbers={drawnNumbers}
+                                playerName={card.playerName}
+                                compact
+                            />
+                        ))}
+                    </div>
+                </div>
+            ) : (
+                <div className="glass-panel p-6 md:p-8">
+                    <div className="flex flex-col items-center justify-center h-full min-h-[400px]">
+                        <h3 className="text-2xl font-bold mb-6 bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-amber-400">
+                            {t.tabGenerateCards}
+                        </h3>
+                        <div className="w-full max-w-sm space-y-4">
+                            <div className="grid grid-cols-2 gap-3">
+                                <div>
+                                    <label className="block text-sm font-medium text-slate-300 mb-2">
+                                        {t.numberOfPlayers}
+                                    </label>
+                                    <input
+                                        type="number"
+                                        min="1"
+                                        max="20"
+                                        value={numberOfPlayers}
+                                        onChange={(e) => setNumberOfPlayers(Math.min(20, Math.max(1, parseInt(e.target.value) || 1)))}
+                                        className="input-field w-full"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium text-slate-300 mb-2">
+                                        {t.cardsPerPlayer}
+                                    </label>
+                                    <input
+                                        type="number"
+                                        min="1"
+                                        max="10"
+                                        value={cardsPerPlayer}
+                                        onChange={(e) => setCardsPerPlayer(Math.min(10, Math.max(1, parseInt(e.target.value) || 1)))}
+                                        className="input-field w-full"
+                                    />
+                                </div>
+                            </div>
+                            <div className="space-y-2 max-h-[200px] overflow-y-auto">
+                                {Array.from({ length: numberOfPlayers }, (_, i) => (
+                                    <div key={i}>
+                                        <label className="block text-xs font-medium text-slate-400 mb-1">
+                                            {t.playerLabel} {i + 1}
+                                        </label>
+                                        <input
+                                            type="text"
+                                            value={playerNames[i] || ''}
+                                            onChange={(e) => {
+                                                const newNames = [...playerNames];
+                                                newNames[i] = e.target.value;
+                                                setPlayerNames(newNames);
+                                            }}
+                                            placeholder={`${t.playerLabel} ${i + 1}`}
+                                            className="input-field w-full text-sm"
+                                        />
+                                    </div>
+                                ))}
+                            </div>
+                            <button
+                                onClick={generateCards}
+                                disabled={isGenerating}
+                                className="w-full px-6 py-3 bg-amber-600 hover:bg-amber-500 text-white font-semibold rounded-xl transition-all duration-300 shadow-lg shadow-amber-500/20 hover:shadow-amber-500/40 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                                {isGenerating ? t.generating : t.generateCards}
+                            </button>
                         </div>
                     </div>
                 </div>
+            )}
 
-                {/* Playing Cards Display or Generate Cards Prompt */}
-                <div className="glass-panel p-6 md:p-8">
-                    {generatedCards.length > 0 ? (
-                        <>
-                            <h2 className="text-center text-2xl font-bold mb-6 bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-amber-400">
-                                {t.playingCards}
-                            </h2>
-                            <div className="text-center text-sm text-slate-400 mb-4">
-                                {generatedCards.length} {generatedCards.length === 1 ? t.card : t.cards}
-                            </div>
+            {/* Zahlenübersicht */}
+            <div className="glass-panel p-6 md:p-8">
+                <h2 className="text-center text-2xl font-bold mb-6 bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-amber-400">
+                    {t.allNumbersOverview}
+                </h2>
 
-                            {/* PDF Export Controls */}
-                            <div className="mb-4 flex gap-3 items-center justify-center">
-                                <div className="flex items-center gap-2">
-                                    <label className="text-xs font-medium text-slate-400">
-                                        {t.cardsPerPage}:
-                                    </label>
-                                    <select
-                                        value={cardsPerPage}
-                                        onChange={(e) => setCardsPerPage(parseInt(e.target.value))}
-                                        className="input-field text-sm py-1 px-2 bg-slate-800 border-white/10"
-                                    >
-                                        <option value="2" className="bg-slate-800">2</option>
-                                        <option value="3" className="bg-slate-800">3</option>
-                                        <option value="4" className="bg-slate-800">4</option>
-                                        <option value="5" className="bg-slate-800">5</option>
-                                    </select>
-                                </div>
-                                <button
-                                    onClick={exportToPDF}
-                                    disabled={isExporting}
-                                    className="px-4 py-1 bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-semibold rounded-lg transition-all duration-300 shadow-lg shadow-emerald-500/20 hover:shadow-emerald-500/40 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
-                                >
-                                    {isExporting ? t.creatingPdf : t.downloadPdf}
-                                </button>
-                            </div>
+                {/* Zahlen Grid */}
+                <div className="grid grid-cols-10 gap-2 mb-8">
+                    {Array.from({ length: TOTAL_NUMBERS }, (_, i) => i + 1).map(num => {
+                        const drawn = isNumberDrawn(num);
+                        const isJustDrawn = num === justDrawn;
 
-                            <div className="grid grid-cols-2 gap-3 max-h-[600px] overflow-y-auto">
-                                {generatedCards.map((card) => (
-                                    <LottoCard
-                                        key={card.id}
-                                        cardNumber={card.id}
-                                        grid={card.grid}
-                                        drawnNumbers={drawnNumbers}
-                                        playerName={card.playerName}
-                                        compact
-                                    />
-                                ))}
+                        return (
+                            <div
+                                key={num}
+                                className={`
+                  aspect-square flex items-center justify-center rounded-lg font-semibold text-sm md:text-base
+                  transition-all duration-500 border
+                  ${drawn
+                                        ? 'bg-gradient-to-br from-emerald-500 to-emerald-700 text-white border-emerald-400/50 shadow-lg shadow-emerald-500/20 scale-105'
+                                        : 'bg-slate-800/30 text-slate-600 border-white/5'
+                                    }
+                  ${isJustDrawn ? 'animate-bounce scale-125 z-10' : ''}
+                `}
+                            >
+                                {num}
                             </div>
-                        </>
-                    ) : (
-                        <div className="flex flex-col items-center justify-center h-full min-h-[400px]">
-                            <h3 className="text-2xl font-bold mb-6 bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-amber-400">
-                                {t.tabGenerateCards}
-                            </h3>
-                            <div className="w-full max-w-sm space-y-4">
-                                <div className="grid grid-cols-2 gap-3">
-                                    <div>
-                                        <label className="block text-sm font-medium text-slate-300 mb-2">
-                                            Anzahl Spieler
-                                        </label>
-                                        <input
-                                            type="number"
-                                            min="1"
-                                            max="20"
-                                            value={numberOfPlayers}
-                                            onChange={(e) => setNumberOfPlayers(Math.min(20, Math.max(1, parseInt(e.target.value) || 1)))}
-                                            className="input-field w-full"
-                                        />
-                                    </div>
-                                    <div>
-                                        <label className="block text-sm font-medium text-slate-300 mb-2">
-                                            Karten pro Spieler
-                                        </label>
-                                        <input
-                                            type="number"
-                                            min="1"
-                                            max="10"
-                                            value={cardsPerPlayer}
-                                            onChange={(e) => setCardsPerPlayer(Math.min(10, Math.max(1, parseInt(e.target.value) || 1)))}
-                                            className="input-field w-full"
-                                        />
-                                    </div>
-                                </div>
-                                <div className="space-y-2 max-h-[200px] overflow-y-auto">
-                                    {Array.from({ length: numberOfPlayers }, (_, i) => (
-                                        <div key={i}>
-                                            <label className="block text-xs font-medium text-slate-400 mb-1">
-                                                Spieler {i + 1}
-                                            </label>
-                                            <input
-                                                type="text"
-                                                value={playerNames[i] || ''}
-                                                onChange={(e) => {
-                                                    const newNames = [...playerNames];
-                                                    newNames[i] = e.target.value;
-                                                    setPlayerNames(newNames);
-                                                }}
-                                                placeholder={`Spieler ${i + 1}`}
-                                                className="input-field w-full text-sm"
-                                            />
-                                        </div>
-                                    ))}
-                                </div>
-                                <button
-                                    onClick={generateCards}
-                                    disabled={isGenerating}
-                                    className="w-full px-6 py-3 bg-amber-600 hover:bg-amber-500 text-white font-semibold rounded-xl transition-all duration-300 shadow-lg shadow-amber-500/20 hover:shadow-amber-500/40 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
-                                >
-                                    {isGenerating ? t.generating : t.generateCards}
-                                </button>
-                            </div>
-                        </div>
-                    )}
+                        );
+                    })}
+                </div>
+
+                {/* Statistik */}
+                <div className="flex justify-center gap-12 flex-wrap border-t border-white/5 pt-6">
+                    <div className="text-center">
+                        <div className="text-3xl font-bold text-blue-400">{drawnNumbers.length}</div>
+                        <div className="text-slate-500 text-sm uppercase tracking-wider font-medium">{t.drawn}</div>
+                    </div>
+                    <div className="text-center">
+                        <div className="text-3xl font-bold text-slate-400">{remainingNumbers}</div>
+                        <div className="text-slate-500 text-sm uppercase tracking-wider font-medium">{t.remaining}</div>
+                    </div>
                 </div>
             </div>
 

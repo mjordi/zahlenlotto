@@ -51,12 +51,6 @@ export default function LottoCard({ cardNumber, grid, compact, drawnNumbers = []
                                         `}
                                     >
                                         {num}
-                                        {drawn && (
-                                            <div className="absolute inset-0 flex items-center justify-center">
-                                                <div className="w-1 h-full bg-emerald-800/60 rotate-45"></div>
-                                                <div className="w-1 h-full bg-emerald-800/60 -rotate-45 absolute"></div>
-                                            </div>
-                                        )}
                                     </div>
                                 );
                             })}
