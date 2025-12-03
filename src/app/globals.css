@@ -22,7 +22,7 @@
   --lotto-cell-text: #0f172a;
   --lotto-cell-empty: rgba(30, 41, 59, 0.5);
   --lotto-card-bg: rgba(15, 23, 42, 0.5);
-  --lotto-card-border: rgba(15, 23, 42, 0.2);
+  --lotto-card-border: rgba(255, 255, 255, 0.2);
 }
 
 /* Light mode */
