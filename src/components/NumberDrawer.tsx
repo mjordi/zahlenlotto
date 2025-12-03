@@ -98,7 +98,7 @@ export default function NumberDrawer({
     const triggerConfetti = useCallback(() => {
         const duration = 3000;
         const animationEnd = Date.now() + duration;
-        const defaults = { startVelocity: 30, spread: 360, ticks: 60, zIndex: 9999 };
+        const defaults = { startVelocity: 30, spread: 360, ticks: 60, zIndex: 10001 };
 
         function randomInRange(min: number, max: number) {
             return Math.random() * (max - min) + min;
