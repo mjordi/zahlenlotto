@@ -42,6 +42,7 @@ export default function LottoCard({ cardNumber, grid, compact, drawnNumbers = []
                                         className={`
                                             aspect-[3/4] flex items-center justify-center border border-white/10
                                             relative transition-all duration-300
+                                            ${compact ? 'text-xs sm:text-sm' : ''}
                                             ${num !== null
                                                 ? drawn
                                                     ? 'font-bold text-white bg-emerald-600 shadow-inner'
