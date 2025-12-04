@@ -362,7 +362,7 @@ export default function NumberDrawer({
                       aspect-square flex items-center justify-center rounded-lg font-semibold text-sm md:text-base
                       transition-all duration-500 border
                       ${drawn
-                                            ? 'bg-gradient-to-br from-emerald-500 to-emerald-700 text-white border-emerald-400/50 shadow-lg shadow-emerald-500/20 scale-105'
+                                            ? 'bg-gradient-to-br from-emerald-600 to-emerald-800 text-white border-emerald-400/50 shadow-lg shadow-emerald-500/20 scale-105'
                                             : 'border'
                                         }
                       ${isJustDrawn ? 'animate-bounce scale-125 z-10' : ''}
@@ -406,13 +406,15 @@ export default function NumberDrawer({
                             {/* PDF Export Controls */}
                             <div className="mb-4 flex gap-3 items-center justify-center">
                                 <div className="flex items-center gap-2">
-                                    <label className="text-xs font-medium" style={{ color: 'var(--text-muted)' }}>
+                                    <label htmlFor="cardsPerPageSelect" className="text-xs font-medium" style={{ color: 'var(--text-muted)' }}>
                                         {t.cardsPerPage}:
                                     </label>
                                     <select
+                                        id="cardsPerPageSelect"
                                         value={cardsPerPage}
                                         onChange={(e) => setCardsPerPage(parseInt(e.target.value))}
                                         className="input-field text-sm py-1 px-2"
+                                        aria-label={t.cardsPerPage}
                                     >
                                         <option value="2">2</option>
                                         <option value="3">3</option>
@@ -423,7 +425,7 @@ export default function NumberDrawer({
                                 <button
                                     onClick={exportToPDF}
                                     disabled={isExporting}
-                                    className="px-4 py-1 bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-semibold rounded-lg transition-all duration-300 shadow-lg shadow-emerald-500/20 hover:shadow-emerald-500/40 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
+                                    className="px-4 py-1 bg-emerald-700 hover:bg-emerald-600 text-white text-sm font-semibold rounded-lg transition-all duration-300 shadow-lg shadow-emerald-500/20 hover:shadow-emerald-500/40 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
                                 >
                                     {isExporting ? t.creatingPdf : t.downloadPdf}
                                 </button>

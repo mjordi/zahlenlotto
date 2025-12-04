@@ -58,7 +58,7 @@ export default function LottoCard({ cardNumber, grid, compact, drawnNumbers = []
                                             ${compact ? 'text-[11px] sm:text-xs' : ''}
                                             ${num !== null
                                                 ? drawn
-                                                    ? 'font-bold text-white bg-emerald-600 shadow-inner'
+                                                    ? 'font-bold text-white bg-emerald-700 shadow-inner'
                                                     : 'font-bold'
                                                 : ''
                                             }
