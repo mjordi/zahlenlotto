@@ -61,53 +61,6 @@ export default async function Image() {
                 >
                     Number Drawing & Card Generation for Lottery Games
                 </div>
-                <div
-                    style={{
-                        marginTop: '60px',
-                        display: 'flex',
-                        gap: '30px',
-                    }}
-                >
-                    <div
-                        style={{
-                            background: 'rgba(59, 130, 246, 0.2)',
-                            border: '2px solid #3b82f6',
-                            borderRadius: '16px',
-                            padding: '20px 40px',
-                            fontSize: 28,
-                            color: '#60a5fa',
-                            fontWeight: '600',
-                        }}
-                    >
-                        90 Numbers
-                    </div>
-                    <div
-                        style={{
-                            background: 'rgba(168, 85, 247, 0.2)',
-                            border: '2px solid #a855f7',
-                            borderRadius: '16px',
-                            padding: '20px 40px',
-                            fontSize: 28,
-                            color: '#c084fc',
-                            fontWeight: '600',
-                        }}
-                    >
-                        PDF Export
-                    </div>
-                    <div
-                        style={{
-                            background: 'rgba(34, 197, 94, 0.2)',
-                            border: '2px solid #22c55e',
-                            borderRadius: '16px',
-                            padding: '20px 40px',
-                            fontSize: 28,
-                            color: '#4ade80',
-                            fontWeight: '600',
-                        }}
-                    >
-                        Multi-Language
-                    </div>
-                </div>
             </div>
         ),
         {
