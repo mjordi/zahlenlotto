@@ -13,7 +13,6 @@ export interface Translations {
     appSubtitle: string;
 
     // Tabs
-    tabDrawNumbers: string;
     tabGenerateCards: string;
 
     // Number Drawer
@@ -30,17 +29,11 @@ export interface Translations {
     nthDrawing: string;
 
     // Card Generator
-    settings: string;
-    totalCards: string;
     cardsPerPage: string;
-    cardDescription: string;
     generateCards: string;
     generating: string;
     downloadPdf: string;
     creatingPdf: string;
-    preview: string;
-    cardsGenerated: string;
-    moreCards: string;
     card: string;
     cards: string;
 
@@ -50,6 +43,7 @@ export interface Translations {
     pdfPageOf: string;
     pdfInstructions: string;
     pdfFilename: string;
+    pdfError: string;
 
     // Keyboard shortcuts
     keyboardHint: string;
@@ -97,7 +91,6 @@ export const translations: Record<Language, Translations> = {
         appSubtitle: 'Zahlenziehung & Kartengenerierung',
 
         // Tabs
-        tabDrawNumbers: 'Zahlen ziehen',
         tabGenerateCards: 'Karten generieren',
 
         // Number Drawer
@@ -114,17 +107,11 @@ export const translations: Record<Language, Translations> = {
         nthDrawing: '. Ziehung',
 
         // Card Generator
-        settings: 'Einstellungen',
-        totalCards: 'Anzahl Karten gesamt',
         cardsPerPage: 'Karten pro A4 Seite',
-        cardDescription: 'Jede Karte: 3 Reihen × 9 Spalten, 5 Zahlen pro Reihe',
         generateCards: 'Karten generieren',
         generating: 'Generiere...',
         downloadPdf: 'Als PDF herunterladen',
         creatingPdf: 'Erstelle PDF...',
-        preview: 'Vorschau',
-        cardsGenerated: 'generiert',
-        moreCards: '... und',
         card: 'Karte',
         cards: 'Karten',
 
@@ -134,6 +121,7 @@ export const translations: Record<Language, Translations> = {
         pdfPageOf: 'von',
         pdfInstructions: "Spielanleitung: Decke die gezogenen Zahlen ab. Wer zuerst eine Reihe voll hat, ruft 'LOTTO!'",
         pdfFilename: 'zahlenlotto_karten',
+        pdfError: 'Fehler beim Erstellen der PDF-Datei',
 
         // Keyboard shortcuts
         keyboardHint: 'Tastatur:',
@@ -180,7 +168,6 @@ export const translations: Record<Language, Translations> = {
         appSubtitle: 'Number Drawing & Card Generation',
 
         // Tabs
-        tabDrawNumbers: 'Draw Numbers',
         tabGenerateCards: 'Generate Cards',
 
         // Number Drawer
@@ -197,17 +184,11 @@ export const translations: Record<Language, Translations> = {
         nthDrawing: '. Drawing',
 
         // Card Generator
-        settings: 'Settings',
-        totalCards: 'Total Cards',
         cardsPerPage: 'Cards per A4 Page',
-        cardDescription: 'Each card: 3 rows × 9 columns, 5 numbers per row',
         generateCards: 'Generate Cards',
         generating: 'Generating...',
         downloadPdf: 'Download as PDF',
         creatingPdf: 'Creating PDF...',
-        preview: 'Preview',
-        cardsGenerated: 'generated',
-        moreCards: '... and',
         card: 'Card',
         cards: 'Cards',
 
@@ -217,6 +198,7 @@ export const translations: Record<Language, Translations> = {
         pdfPageOf: 'of',
         pdfInstructions: "Game rules: Cover the drawn numbers. First to complete a row shouts 'LOTTO!'",
         pdfFilename: 'number_lotto_cards',
+        pdfError: 'Error creating PDF file',
 
         // Keyboard shortcuts
         keyboardHint: 'Keyboard:',
@@ -263,7 +245,6 @@ export const translations: Record<Language, Translations> = {
         appSubtitle: 'Tirage de Numéros & Génération de Cartes',
 
         // Tabs
-        tabDrawNumbers: 'Tirer des Numéros',
         tabGenerateCards: 'Générer des Cartes',
 
         // Number Drawer
@@ -280,17 +261,11 @@ export const translations: Record<Language, Translations> = {
         nthDrawing: 'e Tirage',
 
         // Card Generator
-        settings: 'Paramètres',
-        totalCards: 'Nombre Total de Cartes',
         cardsPerPage: 'Cartes par Page A4',
-        cardDescription: 'Chaque carte: 3 lignes × 9 colonnes, 5 numéros par ligne',
         generateCards: 'Générer des Cartes',
         generating: 'Génération...',
         downloadPdf: 'Télécharger en PDF',
         creatingPdf: 'Création du PDF...',
-        preview: 'Aperçu',
-        cardsGenerated: 'générées',
-        moreCards: '... et',
         card: 'Carte',
         cards: 'Cartes',
 
@@ -300,6 +275,7 @@ export const translations: Record<Language, Translations> = {
         pdfPageOf: 'de',
         pdfInstructions: "Règles du jeu: Couvrez les numéros tirés. Le premier à compléter une ligne crie 'LOTO!'",
         pdfFilename: 'loto_numerique_cartes',
+        pdfError: 'Erreur lors de la création du fichier PDF',
 
         // Keyboard shortcuts
         keyboardHint: 'Clavier:',
@@ -346,7 +322,6 @@ export const translations: Record<Language, Translations> = {
         appSubtitle: 'Estrazione Numeri & Generazione Cartelle',
 
         // Tabs
-        tabDrawNumbers: 'Estrai Numeri',
         tabGenerateCards: 'Genera Cartelle',
 
         // Number Drawer
@@ -363,17 +338,11 @@ export const translations: Record<Language, Translations> = {
         nthDrawing: '° Estrazione',
 
         // Card Generator
-        settings: 'Impostazioni',
-        totalCards: 'Numero Totale di Cartelle',
         cardsPerPage: 'Cartelle per Pagina A4',
-        cardDescription: 'Ogni cartella: 3 righe × 9 colonne, 5 numeri per riga',
         generateCards: 'Genera Cartelle',
         generating: 'Generazione...',
         downloadPdf: 'Scarica come PDF',
         creatingPdf: 'Creazione PDF...',
-        preview: 'Anteprima',
-        cardsGenerated: 'generate',
-        moreCards: '... e',
         card: 'Cartella',
         cards: 'Cartelle',
 
@@ -383,6 +352,7 @@ export const translations: Record<Language, Translations> = {
         pdfPageOf: 'di',
         pdfInstructions: "Regole del gioco: Copri i numeri estratti. Il primo a completare una riga grida 'TOMBOLA!'",
         pdfFilename: 'lotto_numerico_cartelle',
+        pdfError: 'Errore durante la creazione del file PDF',
 
         // Keyboard shortcuts
         keyboardHint: 'Tastiera:',

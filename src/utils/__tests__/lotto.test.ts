@@ -1,7 +1,5 @@
 import {
   generateLottoCard,
-  generateUniqueNumbers,
-  getRandomNumber,
   TOTAL_NUMBERS,
   isRowComplete,
   getCompletedRows,
@@ -10,49 +8,6 @@ import {
 } from '../lotto';
 
 describe('lotto utilities', () => {
-  describe('getRandomNumber', () => {
-    it('should generate a number within the specified range', () => {
-      const min = 1;
-      const max = 10;
-      const result = getRandomNumber(min, max);
-
-      expect(result).toBeGreaterThanOrEqual(min);
-      expect(result).toBeLessThanOrEqual(max);
-    });
-
-    it('should work with min and max being the same', () => {
-      const result = getRandomNumber(5, 5);
-      expect(result).toBe(5);
-    });
-  });
-
-  describe('generateUniqueNumbers', () => {
-    it('should generate the correct count of unique numbers', () => {
-      const numbers = generateUniqueNumbers(5, 1, 10);
-
-      expect(numbers).toHaveLength(5);
-      expect(new Set(numbers).size).toBe(5);
-    });
-
-    it('should generate numbers within the specified range', () => {
-      const min = 10;
-      const max = 20;
-      const numbers = generateUniqueNumbers(5, min, max);
-
-      numbers.forEach(num => {
-        expect(num).toBeGreaterThanOrEqual(min);
-        expect(num).toBeLessThanOrEqual(max);
-      });
-    });
-
-    it('should return sorted numbers', () => {
-      const numbers = generateUniqueNumbers(10, 1, 100);
-      const sorted = [...numbers].sort((a, b) => a - b);
-
-      expect(numbers).toEqual(sorted);
-    });
-  });
-
   describe('generateLottoCard', () => {
     it('should generate a 3x9 grid', () => {
       const card = generateLottoCard();

@@ -5,21 +5,12 @@ export const COLUMN_LABELS = ['1-9', '10-19', '20-29', '30-39', '40-49', '50-59'
 export type LottoCard = (number | null)[][];
 
 /**
- * Generates a random integer between min and max (inclusive).
+ * Represents a player's card with metadata.
  */
-export function getRandomNumber(min: number, max: number): number {
-  return Math.floor(Math.random() * (max - min + 1)) + min;
-}
-
-/**
- * Generates a set of unique random numbers.
- */
-export function generateUniqueNumbers(count: number, min: number, max: number): number[] {
-  const numbers = new Set<number>();
-  while (numbers.size < count) {
-    numbers.add(getRandomNumber(min, max));
-  }
-  return Array.from(numbers).sort((a, b) => a - b);
+export interface Card {
+    id: number;
+    grid: LottoCard;
+    playerName?: string;
 }
 
 /**
@@ -83,9 +74,6 @@ export function generateLottoCard(): LottoCard {
       if (available.length > 0) {
         const num = available[Math.floor(Math.random() * available.length)];
         card[row][col] = num;
-      } else {
-        // Should not happen with standard ranges and only 3 rows
-        console.warn(`No numbers available for col ${col} row ${row}`);
       }
     }
   }

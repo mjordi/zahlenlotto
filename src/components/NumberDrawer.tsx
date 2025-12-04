@@ -2,17 +2,10 @@
 
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { useLanguage } from '@/contexts/LanguageContext';
-import { TOTAL_NUMBERS, LottoCard as LottoCardType, getNewlyCompletedRows, generateLottoCard } from '@/utils/lotto';
+import { TOTAL_NUMBERS, Card, getNewlyCompletedRows, generateLottoCard } from '@/utils/lotto';
 import LottoCard from './LottoCard';
 import confetti from 'canvas-confetti';
 import { generatePdf } from '@/utils/pdfGenerator';
-
-interface Card {
-    id: number;
-    grid: LottoCardType;
-    playerId: number;
-    playerName: string;
-}
 
 interface NumberDrawerProps {
     drawnNumbers: number[];
@@ -139,8 +132,9 @@ export default function NumberDrawer({
             if (newlyCompletedRows.length > 0) {
                 newCompletionsByCard.set(card.id, newlyCompletedRows);
 
-                if (!playersWithNewCompletion.includes(card.playerName)) {
-                    playersWithNewCompletion.push(card.playerName);
+                const name = card.playerName || '';
+                if (name && !playersWithNewCompletion.includes(name)) {
+                    playersWithNewCompletion.push(name);
                 }
             }
         }
@@ -258,13 +252,12 @@ export default function NumberDrawer({
         setTimeout(() => {
             const cards: Card[] = [];
             let cardId = 1;
-            for (let playerId = 0; playerId < numberOfPlayers; playerId++) {
+            for (let playerIdx = 0; playerIdx < numberOfPlayers; playerIdx++) {
                 for (let cardNum = 0; cardNum < cardsPerPlayer; cardNum++) {
                     cards.push({
                         id: cardId++,
                         grid: generateLottoCard(),
-                        playerId: playerId,
-                        playerName: playerNames[playerId]?.trim() || `${t.playerLabel} ${playerId + 1}`,
+                        playerName: playerNames[playerIdx]?.trim() || `${t.playerLabel} ${playerIdx + 1}`,
                     });
                 }
             }
@@ -545,7 +538,11 @@ export default function NumberDrawer({
 
             {/* Celebration Overlay */}
             {showCelebration && (
-                <div className="fixed inset-0 flex items-center justify-center z-[10000] pointer-events-none">
+                <div
+                    className="fixed inset-0 flex items-center justify-center z-[10000] pointer-events-none"
+                    role="alert"
+                    aria-live="assertive"
+                >
                     <div className="bg-gradient-to-br from-amber-400 via-amber-500 to-amber-600 text-white px-16 py-12 rounded-3xl shadow-2xl border-4 border-white/30 animate-bounce">
                         <div className="text-7xl font-black tracking-wider drop-shadow-2xl">
                             {t.lottoWin}
