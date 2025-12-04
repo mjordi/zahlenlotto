@@ -93,6 +93,28 @@ Cards follow traditional Tombola/Bingo format:
 - Numbers sorted within each column
 - All numbers unique per card
 
+**Seeded Card Generation:**
+- Cards can be generated with a seed for reproducibility
+- Use `generateLottoCardWithSeed(seed, cardIndex)` from `session.ts`
+- Same seed + cardIndex = same card (deterministic)
+- This enables shareable game sessions via URL
+
+### 6.1 Shareable Game Sessions
+
+The app supports shareable URLs for game sessions:
+- **Session data** is encoded in URL parameters:
+  - `s`: Session seed (8-char alphanumeric)
+  - `p`: Number of players (1-20)
+  - `c`: Cards per player (1-10)
+  - `n`: Player names (comma-separated, optional)
+- **Example URL**: `https://example.com/?s=abc12345&p=2&c=3&n=Alice,Bob`
+- **Session utilities** in `src/utils/session.ts`:
+  - `generateSessionSeed()`: Generate random 8-char seed
+  - `generateLottoCardWithSeed(seed, index)`: Deterministic card generation
+  - `encodeSessionToParams(session)`: Encode to URLSearchParams
+  - `decodeSessionFromParams(params)`: Decode from URLSearchParams
+  - `createShareableUrl(session)`: Create full shareable URL
+
 ### 7. Git Workflow
 
 **Commits:**

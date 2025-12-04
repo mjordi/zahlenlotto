@@ -82,6 +82,13 @@ export interface Translations {
     themeAuto: string;
     themeLight: string;
     themeDark: string;
+
+    // Share
+    shareGame: string;
+    shareGameDescription: string;
+    copyLink: string;
+    linkCopied: string;
+    joinedSession: string;
 }
 
 export const translations: Record<Language, Translations> = {
@@ -160,6 +167,13 @@ export const translations: Record<Language, Translations> = {
         themeAuto: 'Automatisch',
         themeLight: 'Hell',
         themeDark: 'Dunkel',
+
+        // Share
+        shareGame: 'Spiel teilen',
+        shareGameDescription: 'Teile diesen Link, damit andere Spieler dieselben Karten erhalten',
+        copyLink: 'Link kopieren',
+        linkCopied: 'Link kopiert!',
+        joinedSession: 'Geteiltem Spiel beigetreten',
     },
 
     en: {
@@ -237,6 +251,13 @@ export const translations: Record<Language, Translations> = {
         themeAuto: 'Automatic',
         themeLight: 'Light',
         themeDark: 'Dark',
+
+        // Share
+        shareGame: 'Share Game',
+        shareGameDescription: 'Share this link so other players get the same cards',
+        copyLink: 'Copy Link',
+        linkCopied: 'Link copied!',
+        joinedSession: 'Joined shared game',
     },
 
     fr: {
@@ -314,6 +335,13 @@ export const translations: Record<Language, Translations> = {
         themeAuto: 'Automatique',
         themeLight: 'Clair',
         themeDark: 'Sombre',
+
+        // Share
+        shareGame: 'Partager le Jeu',
+        shareGameDescription: 'Partagez ce lien pour que les autres joueurs obtiennent les mêmes cartes',
+        copyLink: 'Copier le Lien',
+        linkCopied: 'Lien copié!',
+        joinedSession: 'Partie partagée rejointe',
     },
 
     it: {
@@ -391,6 +419,13 @@ export const translations: Record<Language, Translations> = {
         themeAuto: 'Automatico',
         themeLight: 'Chiaro',
         themeDark: 'Scuro',
+
+        // Share
+        shareGame: 'Condividi Partita',
+        shareGameDescription: 'Condividi questo link per dare agli altri giocatori le stesse cartelle',
+        copyLink: 'Copia Link',
+        linkCopied: 'Link copiato!',
+        joinedSession: 'Partita condivisa unita',
     },
 };
 

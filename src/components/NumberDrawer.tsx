@@ -2,10 +2,16 @@
 
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { useLanguage } from '@/contexts/LanguageContext';
-import { TOTAL_NUMBERS, Card, getNewlyCompletedRows, generateLottoCard } from '@/utils/lotto';
+import { TOTAL_NUMBERS, Card, getNewlyCompletedRows } from '@/utils/lotto';
 import LottoCard from './LottoCard';
 import confetti from 'canvas-confetti';
 import { generatePdf } from '@/utils/pdfGenerator';
+import {
+    SessionData,
+    generateSessionSeed,
+    generateLottoCardWithSeed,
+    createShareableUrl,
+} from '@/utils/session';
 
 interface NumberDrawerProps {
     drawnNumbers: number[];
@@ -16,6 +22,9 @@ interface NumberDrawerProps {
     setSoundEnabled: (enabled: boolean | ((prev: boolean) => boolean)) => void;
     generatedCards: Card[];
     setGeneratedCards: (cards: Card[]) => void;
+    sessionData: SessionData | null;
+    setSessionData: (data: SessionData | null) => void;
+    joinedFromUrl: boolean;
 }
 
 export default function NumberDrawer({
@@ -26,7 +35,10 @@ export default function NumberDrawer({
     soundEnabled,
     setSoundEnabled,
     generatedCards,
-    setGeneratedCards
+    setGeneratedCards,
+    sessionData,
+    setSessionData,
+    joinedFromUrl,
 }: NumberDrawerProps) {
     const [isAnimating, setIsAnimating] = useState(false);
     const [justDrawn, setJustDrawn] = useState<number | null>(null);
@@ -44,6 +56,7 @@ export default function NumberDrawer({
     const [isExporting, setIsExporting] = useState(false);
     const [celebratingPlayers, setCelebratingPlayers] = useState<string[]>([]);
     const [newlyCompletedRowsByCard, setNewlyCompletedRowsByCard] = useState<Map<number, number[]>>(new Map());
+    const [linkCopied, setLinkCopied] = useState(false);
 
     // Audio Context initialisieren
     const initAudio = useCallback(() => {
@@ -246,25 +259,36 @@ export default function NumberDrawer({
     const isNumberDrawn = (num: number) => drawnNumbers.includes(num);
     const remainingNumbers = TOTAL_NUMBERS - drawnNumbers.length;
 
-    // Generate cards function
+    // Generate cards function with seeded randomness for shareable URLs
     const generateCards = useCallback(() => {
         setIsGenerating(true);
         setTimeout(() => {
+            // Generate a new session seed
+            const seed = generateSessionSeed();
+            const newSession: SessionData = {
+                seed,
+                numberOfPlayers,
+                cardsPerPlayer,
+                playerNames: playerNames.slice(0, numberOfPlayers),
+            };
+            setSessionData(newSession);
+
             const cards: Card[] = [];
             let cardId = 1;
             for (let playerIdx = 0; playerIdx < numberOfPlayers; playerIdx++) {
                 for (let cardNum = 0; cardNum < cardsPerPlayer; cardNum++) {
                     cards.push({
-                        id: cardId++,
-                        grid: generateLottoCard(),
+                        id: cardId,
+                        grid: generateLottoCardWithSeed(seed, cardId),
                         playerName: playerNames[playerIdx]?.trim() || `${t.playerLabel} ${playerIdx + 1}`,
                     });
+                    cardId++;
                 }
             }
             setGeneratedCards(cards);
             setIsGenerating(false);
         }, 100);
-    }, [numberOfPlayers, cardsPerPlayer, playerNames, t.playerLabel, setGeneratedCards]);
+    }, [numberOfPlayers, cardsPerPlayer, playerNames, t.playerLabel, setGeneratedCards, setSessionData]);
 
     // Export to PDF function
     const exportToPDF = useCallback(() => {
@@ -278,6 +302,28 @@ export default function NumberDrawer({
             setIsExporting(false);
         }, 10);
     }, [generatedCards, cardsPerPage, t]);
+
+    // Copy share link to clipboard
+    const copyShareLink = useCallback(async () => {
+        if (!sessionData) return;
+
+        const url = createShareableUrl(sessionData);
+        try {
+            await navigator.clipboard.writeText(url);
+            setLinkCopied(true);
+            setTimeout(() => setLinkCopied(false), 2000);
+        } catch {
+            // Fallback for older browsers
+            const textArea = document.createElement('textarea');
+            textArea.value = url;
+            document.body.appendChild(textArea);
+            textArea.select();
+            document.execCommand('copy');
+            document.body.removeChild(textArea);
+            setLinkCopied(true);
+            setTimeout(() => setLinkCopied(false), 2000);
+        }
+    }, [sessionData]);
 
     return (
         <div className="w-full max-w-6xl mx-auto space-y-6 relative">
@@ -396,8 +442,18 @@ export default function NumberDrawer({
                                 {generatedCards.length} {generatedCards.length === 1 ? t.card : t.cards}
                             </div>
 
-                            {/* PDF Export Controls */}
-                            <div className="mb-4 flex gap-3 items-center justify-center">
+                            {/* Joined from URL notification */}
+                            {joinedFromUrl && (
+                                <div
+                                    className="mb-4 text-center text-sm py-2 px-4 rounded-lg"
+                                    style={{ backgroundColor: 'var(--btn-secondary-bg)', color: 'var(--text-secondary)' }}
+                                >
+                                    {t.joinedSession}
+                                </div>
+                            )}
+
+                            {/* PDF Export and Share Controls */}
+                            <div className="mb-4 flex flex-wrap gap-3 items-center justify-center">
                                 <div className="flex items-center gap-2">
                                     <label htmlFor="cardsPerPageSelect" className="text-xs font-medium" style={{ color: 'var(--text-muted)' }}>
                                         {t.cardsPerPage}:
@@ -422,6 +478,20 @@ export default function NumberDrawer({
                                 >
                                     {isExporting ? t.creatingPdf : t.downloadPdf}
                                 </button>
+                                {sessionData && (
+                                    <button
+                                        onClick={copyShareLink}
+                                        className="px-4 py-1 bg-blue-700 hover:bg-blue-600 text-white text-sm font-semibold rounded-lg transition-all duration-300 shadow-lg shadow-blue-500/20 hover:shadow-blue-500/40 active:scale-95 flex items-center gap-2"
+                                        title={t.shareGameDescription}
+                                    >
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                                            <path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"></path>
+                                            <polyline points="16 6 12 2 8 6"></polyline>
+                                            <line x1="12" y1="2" x2="12" y2="15"></line>
+                                        </svg>
+                                        {linkCopied ? t.linkCopied : t.shareGame}
+                                    </button>
+                                )}
                             </div>
 
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-h-[600px] overflow-y-auto">
