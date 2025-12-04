@@ -509,7 +509,7 @@ export default function NumberDrawer({
                                 <button
                                     onClick={generateCards}
                                     disabled={isGenerating}
-                                    className="w-full px-6 py-3 bg-amber-700 hover:bg-amber-600 text-white font-semibold rounded-xl transition-all duration-300 shadow-lg shadow-amber-500/20 hover:shadow-amber-500/40 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
+                                    className="w-full px-6 py-3 bg-amber-700 hover:bg-amber-600 text-white font-semibold rounded-xl transition-all duration-300 shadow-lg shadow-amber-700/30 hover:shadow-amber-600/50 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed border border-amber-600/30"
                                     aria-label={isGenerating ? t.generating : t.generateCards}
                                 >
                                     {isGenerating ? t.generating : t.generateCards}

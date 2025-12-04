@@ -27,7 +27,39 @@ export default function RootLayout({
     children: React.ReactNode;
 }) {
     return (
-        <html lang="de">
+        <html lang="de" suppressHydrationWarning>
+            <head>
+                <script
+                    dangerouslySetInnerHTML={{
+                        __html: `
+                            (function() {
+                                try {
+                                    // Prevent flash of default theme
+                                    const themePreference = localStorage.getItem('themePreference');
+                                    let appliedTheme = 'dark'; // Default
+
+                                    if (themePreference === 'light') {
+                                        appliedTheme = 'light';
+                                    } else if (themePreference === 'dark') {
+                                        appliedTheme = 'dark';
+                                    } else if (themePreference === 'auto') {
+                                        // Check system preference
+                                        appliedTheme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+                                    }
+
+                                    document.documentElement.setAttribute('data-theme', appliedTheme);
+
+                                    // Prevent flash of default language
+                                    const lang = localStorage.getItem('language');
+                                    if (lang) {
+                                        document.documentElement.setAttribute('lang', lang);
+                                    }
+                                } catch (e) {}
+                            })();
+                        `,
+                    }}
+                />
+            </head>
             <body className="antialiased">
                 <ThemeProvider>
                     <LanguageProvider>
