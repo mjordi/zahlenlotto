@@ -12,28 +12,38 @@ interface LanguageContextType {
 const LanguageContext = createContext<LanguageContextType | undefined>(undefined);
 
 export function LanguageProvider({ children }: { children: ReactNode }) {
-    // Always start with 'de' to avoid hydration mismatch
-    const [language, setLanguageState] = useState<Language>('de');
+    // Read from data attribute set by blocking script, or default to 'de'
+    // Using lazy initializer to ensure it only runs on client during hydration
+    const [language, setLanguageState] = useState<Language>(() => {
+        if (typeof window === 'undefined') return 'de';
+        const dataLang = document.documentElement.getAttribute('data-language') as Language;
+        if (dataLang && ['de', 'en', 'fr', 'it'].includes(dataLang)) {
+            return dataLang;
+        }
+        return 'de';
+    });
 
-    // After hydration, update to saved or browser language
+    // After hydration, sync with localStorage if not already set
     useEffect(() => {
-        // This effect runs once after hydration to sync client-side state
-        // with localStorage/browser preferences. This is necessary to avoid
-        // hydration mismatches while still respecting user preferences.
+        // The blocking script already set the language from localStorage,
+        // so we only need to check if there's a discrepancy or if no preference exists
 
         // 1. Check localStorage
         const savedLanguage = localStorage.getItem('language') as Language;
         if (savedLanguage && ['de', 'en', 'fr', 'it'].includes(savedLanguage)) {
-            setLanguageState(savedLanguage);
+            if (savedLanguage !== language) {
+                setLanguageState(savedLanguage);
+            }
             return;
         }
 
-        // 2. Check browser language
+        // 2. Check browser language (only if no saved preference)
         const browserLang = navigator.language.split('-')[0];
         if (['de', 'en', 'fr', 'it'].includes(browserLang)) {
             setLanguageState(browserLang as Language);
         }
-    }, []);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []); // Only run once on mount
 
     const setLanguage = (lang: Language) => {
         setLanguageState(lang);

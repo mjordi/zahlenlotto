@@ -50,10 +50,9 @@ export default function RootLayout({
                                     document.documentElement.setAttribute('data-theme', appliedTheme);
 
                                     // Prevent flash of default language
-                                    const lang = localStorage.getItem('language');
-                                    if (lang) {
-                                        document.documentElement.setAttribute('lang', lang);
-                                    }
+                                    const lang = localStorage.getItem('language') || 'de';
+                                    document.documentElement.setAttribute('lang', lang);
+                                    document.documentElement.setAttribute('data-language', lang);
                                 } catch (e) {}
                             })();
                         `,
