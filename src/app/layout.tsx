@@ -12,7 +12,7 @@ export const metadata: Metadata = {
     // OpenGraph metadata
     openGraph: {
         type: "website",
-        locale: "de_DE",
+        locale: "en_US",
         url: "https://zahlenlotto.vercel.app",
         siteName: "Zahlenlotto",
         title: "Zahlenlotto - Number Drawing & Card Generation",
@@ -43,7 +43,7 @@ export default function RootLayout({
     children: React.ReactNode;
 }) {
     return (
-        <html lang="de">
+        <html lang="en">
             <body className="antialiased">
                 <ThemeProvider>
                     <LanguageProvider>
