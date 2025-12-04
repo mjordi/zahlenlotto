@@ -37,11 +37,12 @@ const nextConfig: NextConfig = {
             key: 'Content-Security-Policy',
             value: [
               "default-src 'self'",
-              // Next.js requires 'unsafe-eval' for development HMR, 'unsafe-inline' and 'wasm-unsafe-eval' for production
+              // Next.js requires 'unsafe-eval' for development HMR
+              // jsPDF requires 'unsafe-eval' in production for font handling (uses new Function())
               // Vercel Live needs vercel.live for preview environments
               isDev
                 ? "script-src 'self' 'unsafe-eval' 'unsafe-inline'"
-                : `script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval'${allowVercelLive ? ' https://vercel.live' : ''}`,
+                : `script-src 'self' 'unsafe-inline' 'unsafe-eval'${allowVercelLive ? ' https://vercel.live' : ''}`,
               // Tailwind CSS requires 'unsafe-inline' for styles
               `style-src 'self' 'unsafe-inline'${allowVercelLive ? ' https://vercel.live' : ''}`,
               "img-src 'self' data: blob:",
