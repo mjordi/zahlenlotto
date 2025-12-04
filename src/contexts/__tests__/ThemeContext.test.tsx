@@ -217,7 +217,8 @@ describe('ThemeContext', () => {
         );
 
         await waitFor(() => {
-            expect(document.documentElement.setAttribute).toHaveBeenCalledWith('data-theme', 'dark');
+            // The data-theme attribute should be set (either by blocking script or by provider)
+            expect(document.documentElement.getAttribute('data-theme')).toBe('dark');
         });
     });
 
