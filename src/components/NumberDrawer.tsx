@@ -2,17 +2,10 @@
 
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { useLanguage } from '@/contexts/LanguageContext';
-import { TOTAL_NUMBERS, LottoCard as LottoCardType, getNewlyCompletedRows, generateLottoCard } from '@/utils/lotto';
+import { TOTAL_NUMBERS, Card, getNewlyCompletedRows, generateLottoCard } from '@/utils/lotto';
 import LottoCard from './LottoCard';
 import confetti from 'canvas-confetti';
 import { generatePdf } from '@/utils/pdfGenerator';
-
-interface Card {
-    id: number;
-    grid: LottoCardType;
-    playerId: number;
-    playerName: string;
-}
 
 interface NumberDrawerProps {
     drawnNumbers: number[];
@@ -139,8 +132,9 @@ export default function NumberDrawer({
             if (newlyCompletedRows.length > 0) {
                 newCompletionsByCard.set(card.id, newlyCompletedRows);
 
-                if (!playersWithNewCompletion.includes(card.playerName)) {
-                    playersWithNewCompletion.push(card.playerName);
+                const name = card.playerName || '';
+                if (name && !playersWithNewCompletion.includes(name)) {
+                    playersWithNewCompletion.push(name);
                 }
             }
         }

@@ -5,6 +5,16 @@ export const COLUMN_LABELS = ['1-9', '10-19', '20-29', '30-39', '40-49', '50-59'
 export type LottoCard = (number | null)[][];
 
 /**
+ * Represents a player's card with metadata.
+ */
+export interface Card {
+    id: number;
+    grid: LottoCard;
+    playerId?: number;
+    playerName?: string;
+}
+
+/**
  * Generates a random integer between min and max (inclusive).
  */
 export function getRandomNumber(min: number, max: number): number {

@@ -113,8 +113,7 @@ zahlenlotto/
 │   │   ├── layout.tsx    # Root layout
 │   │   └── globals.css   # Global styles
 │   ├── components/       # React components
-│   │   ├── CardGenerator.tsx
-│   │   ├── NumberDrawer.tsx
+│   │   ├── NumberDrawer.tsx  # Drawing & card generation
 │   │   ├── LottoCard.tsx
 │   │   ├── ThemeToggle.tsx
 │   │   └── __tests__/    # Component tests

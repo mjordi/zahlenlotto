@@ -50,6 +50,7 @@ export interface Translations {
     pdfPageOf: string;
     pdfInstructions: string;
     pdfFilename: string;
+    pdfError: string;
 
     // Keyboard shortcuts
     keyboardHint: string;
@@ -134,6 +135,7 @@ export const translations: Record<Language, Translations> = {
         pdfPageOf: 'von',
         pdfInstructions: "Spielanleitung: Decke die gezogenen Zahlen ab. Wer zuerst eine Reihe voll hat, ruft 'LOTTO!'",
         pdfFilename: 'zahlenlotto_karten',
+        pdfError: 'Fehler beim Erstellen der PDF-Datei',
 
         // Keyboard shortcuts
         keyboardHint: 'Tastatur:',
@@ -217,6 +219,7 @@ export const translations: Record<Language, Translations> = {
         pdfPageOf: 'of',
         pdfInstructions: "Game rules: Cover the drawn numbers. First to complete a row shouts 'LOTTO!'",
         pdfFilename: 'number_lotto_cards',
+        pdfError: 'Error creating PDF file',
 
         // Keyboard shortcuts
         keyboardHint: 'Keyboard:',
@@ -300,6 +303,7 @@ export const translations: Record<Language, Translations> = {
         pdfPageOf: 'de',
         pdfInstructions: "Règles du jeu: Couvrez les numéros tirés. Le premier à compléter une ligne crie 'LOTO!'",
         pdfFilename: 'loto_numerique_cartes',
+        pdfError: 'Erreur lors de la création du fichier PDF',
 
         // Keyboard shortcuts
         keyboardHint: 'Clavier:',
@@ -383,6 +387,7 @@ export const translations: Record<Language, Translations> = {
         pdfPageOf: 'di',
         pdfInstructions: "Regole del gioco: Copri i numeri estratti. Il primo a completare una riga grida 'TOMBOLA!'",
         pdfFilename: 'lotto_numerico_cartelle',
+        pdfError: 'Errore durante la creazione del file PDF',
 
         // Keyboard shortcuts
         keyboardHint: 'Tastiera:',

@@ -1,20 +1,12 @@
 'use client';
 
-import { useState, lazy, Suspense } from 'react';
+import { useState } from 'react';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { SUPPORTED_LANGUAGES } from '@/utils/translations';
-import { LottoCard } from '@/utils/lotto';
+import { Card } from '@/utils/lotto';
 import ThemeToggle from '@/components/ThemeToggle';
 
-// Lazy load heavy components to reduce initial bundle
 import NumberDrawer from '@/components/NumberDrawer';
-
-interface Card {
-    id: number;
-    grid: LottoCard;
-    playerId: number;
-    playerName: string;
-}
 
 export default function Home() {
     const { language, setLanguage, t } = useLanguage();

@@ -1,13 +1,6 @@
 import { jsPDF } from 'jspdf';
 import { Translations } from './translations';
-import { COLUMN_LABELS } from './lotto';
-
-interface Card {
-    id: number;
-    grid: (number | null)[][];
-    playerId?: number;
-    playerName?: string;
-}
+import { COLUMN_LABELS, Card } from './lotto';
 
 interface PdfConfig {
     cardsPerPage: number;
@@ -145,7 +138,7 @@ export function generatePdf(cards: Card[], t: Translations, config: PdfConfig): 
         const totalCardsText = cards.length;
         pdf.save(`${t.pdfFilename}_${totalCardsText}.pdf`);
     } catch (error) {
-        console.error('Fehler beim PDF-Export:', error);
-        alert('Fehler beim Erstellen der PDF-Datei');
+        console.error('PDF export error:', error);
+        alert(t.pdfError);
     }
 }
