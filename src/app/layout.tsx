@@ -6,7 +6,7 @@ import { ThemeProvider } from '@/contexts/ThemeContext';
 export const metadata: Metadata = {
     metadataBase: new URL('https://zahlenlotto.vercel.app'),
     title: "Zahlenlotto - Number Drawing & Card Generation",
-    description: "Premium Number Drawing & Card Generation for lottery games",
+    description: "Number Drawing & Card Generation for lottery games",
     keywords: ["lotto", "lottery", "number drawing", "card generation"],
     authors: [{ name: "Zahlenlotto" }],
     // OpenGraph metadata
@@ -16,13 +16,13 @@ export const metadata: Metadata = {
         url: "https://zahlenlotto.vercel.app",
         siteName: "Zahlenlotto",
         title: "Zahlenlotto - Number Drawing & Card Generation",
-        description: "Premium Number Drawing & Card Generation for lottery games",
+        description: "Number Drawing & Card Generation for lottery games",
     },
     // Twitter Card metadata
     twitter: {
         card: "summary_large_image",
         title: "Zahlenlotto - Number Drawing & Card Generation",
-        description: "Premium Number Drawing & Card Generation for lottery games",
+        description: "Number Drawing & Card Generation for lottery games",
     },
     // Performance optimizations
     other: {
