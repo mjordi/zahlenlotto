@@ -21,47 +21,29 @@ export const viewport: Viewport = {
     themeColor: "#0f172a",
 };
 
-export default function RootLayout({
+import { cookies } from 'next/headers';
+import { AppliedTheme, ThemePreference } from '@/contexts/ThemeContext';
+import { Language } from '@/utils/translations';
+
+export default async function RootLayout({
     children,
 }: {
     children: React.ReactNode;
 }) {
+    const cookieStore = await cookies();
+    const themeCookie = cookieStore.get('theme');
+    const themePreferenceCookie = cookieStore.get('theme-preference');
+    const langCookie = cookieStore.get('language');
+
+    const theme = (themeCookie?.value === 'light' ? 'light' : 'dark') as AppliedTheme;
+    const themePreference = (['light', 'dark', 'auto'].includes(themePreferenceCookie?.value || '') ? themePreferenceCookie?.value : 'auto') as ThemePreference;
+    const lang = (['de', 'en', 'fr', 'it'].includes(langCookie?.value || '') ? langCookie?.value : 'de') as Language;
+
     return (
-        <html lang="de" suppressHydrationWarning>
-            <head>
-                <script
-                    dangerouslySetInnerHTML={{
-                        __html: `
-                            (function() {
-                                try {
-                                    // Prevent flash of default theme
-                                    const themePreference = localStorage.getItem('themePreference');
-                                    let appliedTheme = 'dark'; // Default
-
-                                    if (themePreference === 'light') {
-                                        appliedTheme = 'light';
-                                    } else if (themePreference === 'dark') {
-                                        appliedTheme = 'dark';
-                                    } else if (themePreference === 'auto') {
-                                        // Check system preference
-                                        appliedTheme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
-                                    }
-
-                                    document.documentElement.setAttribute('data-theme', appliedTheme);
-
-                                    // Prevent flash of default language
-                                    const lang = localStorage.getItem('language') || 'de';
-                                    document.documentElement.setAttribute('lang', lang);
-                                    document.documentElement.setAttribute('data-language', lang);
-                                } catch (e) {}
-                            })();
-                        `,
-                    }}
-                />
-            </head>
+        <html lang={lang} data-theme={theme} data-language={lang} suppressHydrationWarning>
             <body className="antialiased">
-                <ThemeProvider>
-                    <LanguageProvider>
+                <ThemeProvider initialTheme={theme} initialThemePreference={themePreference}>
+                    <LanguageProvider initialLanguage={lang}>
                         {children}
                     </LanguageProvider>
                 </ThemeProvider>

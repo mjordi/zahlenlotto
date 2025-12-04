@@ -7,7 +7,7 @@ import { LottoCard } from '@/utils/lotto';
 import ThemeToggle from '@/components/ThemeToggle';
 
 // Lazy load heavy components to reduce initial bundle
-const NumberDrawer = lazy(() => import('@/components/NumberDrawer'));
+import NumberDrawer from '@/components/NumberDrawer';
 
 interface Card {
     id: number;
@@ -105,23 +105,16 @@ export default function Home() {
                 </header>
 
                 <div className="transition-all duration-500 ease-in-out">
-                    <Suspense fallback={
-                        <div className="glass-panel p-8 text-center">
-                            <div className="inline-block animate-spin rounded-full h-12 w-12 border-4 border-blue-500/20 border-t-blue-500"></div>
-                            <p className="mt-4 text-slate-400">Loading...</p>
-                        </div>
-                    }>
-                        <NumberDrawer
-                            drawnNumbers={drawnNumbers}
-                            setDrawnNumbers={setDrawnNumbers}
-                            currentNumber={currentNumber}
-                            setCurrentNumber={setCurrentNumber}
-                            soundEnabled={soundEnabled}
-                            setSoundEnabled={setSoundEnabled}
-                            generatedCards={generatedCards}
-                            setGeneratedCards={setGeneratedCards}
-                        />
-                    </Suspense>
+                    <NumberDrawer
+                        drawnNumbers={drawnNumbers}
+                        setDrawnNumbers={setDrawnNumbers}
+                        currentNumber={currentNumber}
+                        setCurrentNumber={setCurrentNumber}
+                        soundEnabled={soundEnabled}
+                        setSoundEnabled={setSoundEnabled}
+                        generatedCards={generatedCards}
+                        setGeneratedCards={setGeneratedCards}
+                    />
                 </div>
             </div>
         </main>
