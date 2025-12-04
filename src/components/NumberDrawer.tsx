@@ -538,7 +538,11 @@ export default function NumberDrawer({
 
             {/* Celebration Overlay */}
             {showCelebration && (
-                <div className="fixed inset-0 flex items-center justify-center z-[10000] pointer-events-none">
+                <div
+                    className="fixed inset-0 flex items-center justify-center z-[10000] pointer-events-none"
+                    role="alert"
+                    aria-live="assertive"
+                >
                     <div className="bg-gradient-to-br from-amber-400 via-amber-500 to-amber-600 text-white px-16 py-12 rounded-3xl shadow-2xl border-4 border-white/30 animate-bounce">
                         <div className="text-7xl font-black tracking-wider drop-shadow-2xl">
                             {t.lottoWin}

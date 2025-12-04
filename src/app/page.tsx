@@ -56,6 +56,8 @@ export default function Home() {
                                     background: 'var(--glass-bg)',
                                     borderColor: 'var(--glass-border)'
                                 }}
+                                role="menu"
+                                aria-orientation="vertical"
                             >
                                 {languages.map((lang) => (
                                     <button
@@ -79,8 +81,10 @@ export default function Home() {
                                                 e.currentTarget.style.backgroundColor = 'transparent';
                                             }
                                         }}
+                                        role="menuitem"
+                                        aria-current={language === lang.code ? 'true' : undefined}
                                     >
-                                        <span>{lang.flag}</span>
+                                        <span aria-hidden="true">{lang.flag}</span>
                                         <span className="text-base">{lang.label}</span>
                                     </button>
                                 ))}
