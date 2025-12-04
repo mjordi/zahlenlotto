@@ -11,33 +11,52 @@ interface LanguageContextType {
 
 const LanguageContext = createContext<LanguageContextType | undefined>(undefined);
 
-export function LanguageProvider({ children }: { children: ReactNode }) {
-    // Always start with 'de' to avoid hydration mismatch
-    const [language, setLanguageState] = useState<Language>('de');
+export function LanguageProvider({
+    children,
+    initialLanguage
+}: {
+    children: ReactNode;
+    initialLanguage?: Language;
+}) {
+    // Initialize state with server-provided language or default
+    const [language, setLanguageState] = useState<Language>(() => {
+        if (initialLanguage) return initialLanguage;
+        if (typeof window === 'undefined') return 'de';
+        const dataLang = document.documentElement.getAttribute('data-language') as Language;
+        if (dataLang && ['de', 'en', 'fr', 'it'].includes(dataLang)) {
+            return dataLang;
+        }
+        return 'de';
+    });
 
-    // After hydration, update to saved or browser language
+    // After hydration, sync with localStorage if not already set
     useEffect(() => {
-        // This effect runs once after hydration to sync client-side state
-        // with localStorage/browser preferences. This is necessary to avoid
-        // hydration mismatches while still respecting user preferences.
-
         // 1. Check localStorage
         const savedLanguage = localStorage.getItem('language') as Language;
         if (savedLanguage && ['de', 'en', 'fr', 'it'].includes(savedLanguage)) {
-            setLanguageState(savedLanguage);
+            if (savedLanguage !== language) {
+                setLanguageState(savedLanguage);
+                // Ensure cookie is in sync
+                document.cookie = `language=${savedLanguage}; path=/; max-age=31536000; SameSite=Lax`;
+            }
             return;
         }
 
-        // 2. Check browser language
-        const browserLang = navigator.language.split('-')[0];
-        if (['de', 'en', 'fr', 'it'].includes(browserLang)) {
-            setLanguageState(browserLang as Language);
+        // 2. Check browser language (only if no saved preference and no initial server language)
+        if (!initialLanguage) {
+            const browserLang = navigator.language.split('-')[0];
+            if (['de', 'en', 'fr', 'it'].includes(browserLang)) {
+                setLanguageState(browserLang as Language);
+                document.cookie = `language=${browserLang}; path=/; max-age=31536000; SameSite=Lax`;
+            }
         }
-    }, []);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []); // Only run once on mount
 
     const setLanguage = (lang: Language) => {
         setLanguageState(lang);
         localStorage.setItem('language', lang);
+        document.cookie = `language=${lang}; path=/; max-age=31536000; SameSite=Lax`;
     };
 
     const t = getTranslations(language);

@@ -46,7 +46,7 @@ const nextConfig: NextConfig = {
               `style-src 'self' 'unsafe-inline'${allowVercelLive ? ' https://vercel.live' : ''}`,
               "img-src 'self' data: blob:",
               "font-src 'self' data:",
-              `connect-src 'self'${isDev ? ' ws: wss:' : ''}${allowVercelLive ? ' https://vercel.live wss://ws-us3.pusher.com' : ''}`,
+              `connect-src 'self'${isDev ? ' ws: wss:' : ''}${allowVercelLive ? ' https://vercel.live https://*.vercel.app wss://ws-us3.pusher.com' : ''}`,
               // Vercel Live needs to embed feedback iframe
               allowVercelLive ? "frame-src https://vercel.live" : "frame-src 'none'",
               "object-src 'none'",

@@ -2,7 +2,7 @@
 
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { useLanguage } from '@/contexts/LanguageContext';
-import { TOTAL_NUMBERS, LottoCard as LottoCardType, hasNewlyCompletedRow, generateLottoCard } from '@/utils/lotto';
+import { TOTAL_NUMBERS, LottoCard as LottoCardType, getNewlyCompletedRows, generateLottoCard } from '@/utils/lotto';
 import LottoCard from './LottoCard';
 import confetti from 'canvas-confetti';
 import { generatePdf } from '@/utils/pdfGenerator';
@@ -50,6 +50,7 @@ export default function NumberDrawer({
     const [cardsPerPage, setCardsPerPage] = useState(3);
     const [isExporting, setIsExporting] = useState(false);
     const [celebratingPlayers, setCelebratingPlayers] = useState<string[]>([]);
+    const [newlyCompletedRowsByCard, setNewlyCompletedRowsByCard] = useState<Map<number, number[]>>(new Map());
 
     // Audio Context initialisieren
     const initAudio = useCallback(() => {
@@ -97,7 +98,7 @@ export default function NumberDrawer({
     const triggerConfetti = useCallback(() => {
         const duration = 3000;
         const animationEnd = Date.now() + duration;
-        const defaults = { startVelocity: 30, spread: 360, ticks: 60, zIndex: 9999 };
+        const defaults = { startVelocity: 30, spread: 360, ticks: 60, zIndex: 10001 };
 
         function randomInRange(min: number, max: number) {
             return Math.random() * (max - min) + min;
@@ -130,14 +131,22 @@ export default function NumberDrawer({
 
         const previousDrawn = previousDrawnRef.current;
         const playersWithNewCompletion: string[] = [];
+        const newCompletionsByCard = new Map<number, number[]>();
 
         for (const card of generatedCards) {
-            if (hasNewlyCompletedRow(card.grid, previousDrawn, newDrawnNumbers)) {
+            const newlyCompletedRows = getNewlyCompletedRows(card.grid, previousDrawn, newDrawnNumbers);
+
+            if (newlyCompletedRows.length > 0) {
+                newCompletionsByCard.set(card.id, newlyCompletedRows);
+
                 if (!playersWithNewCompletion.includes(card.playerName)) {
                     playersWithNewCompletion.push(card.playerName);
                 }
             }
         }
+
+        // Update state with newly completed rows
+        setNewlyCompletedRowsByCard(newCompletionsByCard);
 
         if (playersWithNewCompletion.length > 0) {
             setCelebratingPlayers(playersWithNewCompletion);
@@ -200,6 +209,7 @@ export default function NumberDrawer({
         setIsAnimating(false);
         setJustDrawn(null);
         setShowCelebration(false);
+        setNewlyCompletedRowsByCard(new Map());
         previousDrawnRef.current = [];
     }, [drawnNumbers.length, t.confirmRestart, setDrawnNumbers, setCurrentNumber]);
 
@@ -352,7 +362,7 @@ export default function NumberDrawer({
                       aspect-square flex items-center justify-center rounded-lg font-semibold text-sm md:text-base
                       transition-all duration-500 border
                       ${drawn
-                                            ? 'bg-gradient-to-br from-emerald-500 to-emerald-700 text-white border-emerald-400/50 shadow-lg shadow-emerald-500/20 scale-105'
+                                            ? 'bg-gradient-to-br from-emerald-600 to-emerald-800 text-white border-emerald-400/50 shadow-lg shadow-emerald-500/20 scale-105'
                                             : 'border'
                                         }
                       ${isJustDrawn ? 'animate-bounce scale-125 z-10' : ''}
@@ -396,13 +406,15 @@ export default function NumberDrawer({
                             {/* PDF Export Controls */}
                             <div className="mb-4 flex gap-3 items-center justify-center">
                                 <div className="flex items-center gap-2">
-                                    <label className="text-xs font-medium" style={{ color: 'var(--text-muted)' }}>
+                                    <label htmlFor="cardsPerPageSelect" className="text-xs font-medium" style={{ color: 'var(--text-muted)' }}>
                                         {t.cardsPerPage}:
                                     </label>
                                     <select
+                                        id="cardsPerPageSelect"
                                         value={cardsPerPage}
                                         onChange={(e) => setCardsPerPage(parseInt(e.target.value))}
                                         className="input-field text-sm py-1 px-2"
+                                        aria-label={t.cardsPerPage}
                                     >
                                         <option value="2">2</option>
                                         <option value="3">3</option>
@@ -413,7 +425,7 @@ export default function NumberDrawer({
                                 <button
                                     onClick={exportToPDF}
                                     disabled={isExporting}
-                                    className="px-4 py-1 bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-semibold rounded-lg transition-all duration-300 shadow-lg shadow-emerald-500/20 hover:shadow-emerald-500/40 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
+                                    className="px-4 py-1 bg-emerald-700 hover:bg-emerald-600 text-white text-sm font-semibold rounded-lg transition-all duration-300 shadow-lg shadow-emerald-500/20 hover:shadow-emerald-500/40 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
                                 >
                                     {isExporting ? t.creatingPdf : t.downloadPdf}
                                 </button>
@@ -427,6 +439,7 @@ export default function NumberDrawer({
                                         grid={card.grid}
                                         drawnNumbers={drawnNumbers}
                                         playerName={card.playerName}
+                                        newlyCompletedRows={newlyCompletedRowsByCard.get(card.id) || []}
                                         compact
                                     />
                                 ))}
@@ -439,61 +452,68 @@ export default function NumberDrawer({
                             </h2>
                             <div className="flex flex-col items-center justify-center">
                                 <div className="w-full max-w-sm space-y-4">
-                                <div className="grid grid-cols-2 gap-3">
-                                    <div>
-                                        <label className="block text-sm font-medium mb-2" style={{ color: 'var(--text-secondary)' }}>
-                                            {t.numberOfPlayers}
-                                        </label>
-                                        <input
-                                            type="number"
-                                            min="1"
-                                            max="20"
-                                            value={numberOfPlayers}
-                                            onChange={(e) => setNumberOfPlayers(Math.min(20, Math.max(1, parseInt(e.target.value) || 1)))}
-                                            className="input-field w-full"
-                                        />
-                                    </div>
-                                    <div>
-                                        <label className="block text-sm font-medium mb-2" style={{ color: 'var(--text-secondary)' }}>
-                                            {t.cardsPerPlayer}
-                                        </label>
-                                        <input
-                                            type="number"
-                                            min="1"
-                                            max="10"
-                                            value={cardsPerPlayer}
-                                            onChange={(e) => setCardsPerPlayer(Math.min(10, Math.max(1, parseInt(e.target.value) || 1)))}
-                                            className="input-field w-full"
-                                        />
-                                    </div>
-                                </div>
-                                <div className="space-y-2 max-h-[350px] overflow-y-auto">
-                                    {Array.from({ length: numberOfPlayers }, (_, i) => (
-                                        <div key={i}>
-                                            <label className="block text-xs font-medium mb-1" style={{ color: 'var(--text-muted)' }}>
-                                                {t.playerLabel} {i + 1}
+                                    <div className="grid grid-cols-2 gap-3">
+                                        <div>
+                                            <label htmlFor="numberOfPlayers" className="block text-sm font-medium mb-2" style={{ color: 'var(--text-secondary)' }}>
+                                                {t.numberOfPlayers}
                                             </label>
                                             <input
-                                                type="text"
-                                                value={playerNames[i] || ''}
-                                                onChange={(e) => {
-                                                    const newNames = [...playerNames];
-                                                    newNames[i] = e.target.value;
-                                                    setPlayerNames(newNames);
-                                                }}
-                                                placeholder={`${t.playerLabel} ${i + 1}`}
-                                                className="input-field w-full text-sm"
+                                                id="numberOfPlayers"
+                                                type="number"
+                                                min="1"
+                                                max="20"
+                                                value={numberOfPlayers}
+                                                onChange={(e) => setNumberOfPlayers(Math.min(20, Math.max(1, parseInt(e.target.value) || 1)))}
+                                                className="input-field w-full"
+                                                aria-label={t.numberOfPlayers}
                                             />
                                         </div>
-                                    ))}
-                                </div>
-                                <button
-                                    onClick={generateCards}
-                                    disabled={isGenerating}
-                                    className="w-full px-6 py-3 bg-amber-600 hover:bg-amber-500 text-white font-semibold rounded-xl transition-all duration-300 shadow-lg shadow-amber-500/20 hover:shadow-amber-500/40 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
-                                >
-                                    {isGenerating ? t.generating : t.generateCards}
-                                </button>
+                                        <div>
+                                            <label htmlFor="cardsPerPlayer" className="block text-sm font-medium mb-2" style={{ color: 'var(--text-secondary)' }}>
+                                                {t.cardsPerPlayer}
+                                            </label>
+                                            <input
+                                                id="cardsPerPlayer"
+                                                type="number"
+                                                min="1"
+                                                max="10"
+                                                value={cardsPerPlayer}
+                                                onChange={(e) => setCardsPerPlayer(Math.min(10, Math.max(1, parseInt(e.target.value) || 1)))}
+                                                className="input-field w-full"
+                                                aria-label={t.cardsPerPlayer}
+                                            />
+                                        </div>
+                                    </div>
+                                    <div className="space-y-2 max-h-[350px] overflow-y-auto">
+                                        {Array.from({ length: numberOfPlayers }, (_, i) => (
+                                            <div key={i}>
+                                                <label htmlFor={`playerName-${i}`} className="block text-xs font-medium mb-1" style={{ color: 'var(--text-muted)' }}>
+                                                    {t.playerLabel} {i + 1}
+                                                </label>
+                                                <input
+                                                    id={`playerName-${i}`}
+                                                    type="text"
+                                                    value={playerNames[i] || ''}
+                                                    onChange={(e) => {
+                                                        const newNames = [...playerNames];
+                                                        newNames[i] = e.target.value;
+                                                        setPlayerNames(newNames);
+                                                    }}
+                                                    placeholder={`${t.playerLabel} ${i + 1}`}
+                                                    className="input-field w-full text-sm"
+                                                    aria-label={`${t.playerLabel} ${i + 1}`}
+                                                />
+                                            </div>
+                                        ))}
+                                    </div>
+                                    <button
+                                        onClick={generateCards}
+                                        disabled={isGenerating}
+                                        className="w-full px-6 py-3 bg-amber-600 hover:bg-amber-500 text-white font-semibold rounded-xl transition-all duration-300 shadow-lg shadow-amber-500/20 hover:shadow-amber-500/40 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
+                                        aria-label={isGenerating ? t.generating : t.generateCards}
+                                    >
+                                        {isGenerating ? t.generating : t.generateCards}
+                                    </button>
                                 </div>
                             </div>
                         </>

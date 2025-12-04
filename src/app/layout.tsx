@@ -37,16 +37,29 @@ export const viewport: Viewport = {
     themeColor: "#0f172a",
 };
 
-export default function RootLayout({
+import { cookies } from 'next/headers';
+import { AppliedTheme, ThemePreference } from '@/contexts/ThemeContext';
+import { Language } from '@/utils/translations';
+
+export default async function RootLayout({
     children,
 }: {
     children: React.ReactNode;
 }) {
+    const cookieStore = await cookies();
+    const themeCookie = cookieStore.get('theme');
+    const themePreferenceCookie = cookieStore.get('theme-preference');
+    const langCookie = cookieStore.get('language');
+
+    const theme = (themeCookie?.value === 'light' ? 'light' : 'dark') as AppliedTheme;
+    const themePreference = (['light', 'dark', 'auto'].includes(themePreferenceCookie?.value || '') ? themePreferenceCookie?.value : 'auto') as ThemePreference;
+    const lang = (['de', 'en', 'fr', 'it'].includes(langCookie?.value || '') ? langCookie?.value : 'de') as Language;
+
     return (
-        <html lang="de">
+        <html lang={lang} data-theme={theme} data-language={lang} suppressHydrationWarning>
             <body className="antialiased">
-                <ThemeProvider>
-                    <LanguageProvider>
+                <ThemeProvider initialTheme={theme} initialThemePreference={themePreference}>
+                    <LanguageProvider initialLanguage={lang}>
                         {children}
                     </LanguageProvider>
                 </ThemeProvider>
