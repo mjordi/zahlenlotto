@@ -10,26 +10,7 @@ export type LottoCard = (number | null)[][];
 export interface Card {
     id: number;
     grid: LottoCard;
-    playerId?: number;
     playerName?: string;
-}
-
-/**
- * Generates a random integer between min and max (inclusive).
- */
-export function getRandomNumber(min: number, max: number): number {
-  return Math.floor(Math.random() * (max - min + 1)) + min;
-}
-
-/**
- * Generates a set of unique random numbers.
- */
-export function generateUniqueNumbers(count: number, min: number, max: number): number[] {
-  const numbers = new Set<number>();
-  while (numbers.size < count) {
-    numbers.add(getRandomNumber(min, max));
-  }
-  return Array.from(numbers).sort((a, b) => a - b);
 }
 
 /**
@@ -93,9 +74,6 @@ export function generateLottoCard(): LottoCard {
       if (available.length > 0) {
         const num = available[Math.floor(Math.random() * available.length)];
         card[row][col] = num;
-      } else {
-        // Should not happen with standard ranges and only 3 rows
-        console.warn(`No numbers available for col ${col} row ${row}`);
       }
     }
   }

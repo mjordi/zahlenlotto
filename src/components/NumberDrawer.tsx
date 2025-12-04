@@ -252,13 +252,12 @@ export default function NumberDrawer({
         setTimeout(() => {
             const cards: Card[] = [];
             let cardId = 1;
-            for (let playerId = 0; playerId < numberOfPlayers; playerId++) {
+            for (let playerIdx = 0; playerIdx < numberOfPlayers; playerIdx++) {
                 for (let cardNum = 0; cardNum < cardsPerPlayer; cardNum++) {
                     cards.push({
                         id: cardId++,
                         grid: generateLottoCard(),
-                        playerId: playerId,
-                        playerName: playerNames[playerId]?.trim() || `${t.playerLabel} ${playerId + 1}`,
+                        playerName: playerNames[playerIdx]?.trim() || `${t.playerLabel} ${playerIdx + 1}`,
                     });
                 }
             }
