@@ -40,15 +40,13 @@ const nextConfig: NextConfig = {
               // Next.js requires 'unsafe-eval' for development HMR, 'unsafe-inline' and 'wasm-unsafe-eval' for production
               // Vercel Live needs vercel.live for preview environments
               isDev
-                ? "script-src 'self' 'unsafe-eval' 'unsafe-inline' blob: data:"
-                : `script-src 'self' 'unsafe-eval' 'unsafe-inline' 'wasm-unsafe-eval' blob: data:${allowVercelLive ? ' https://vercel.live' : ''}`,
+                ? "script-src 'self' 'unsafe-eval' 'unsafe-inline'"
+                : `script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval'${allowVercelLive ? ' https://vercel.live' : ''}`,
               // Tailwind CSS requires 'unsafe-inline' for styles
               `style-src 'self' 'unsafe-inline'${allowVercelLive ? ' https://vercel.live' : ''}`,
-              `img-src 'self' data: blob:${allowVercelLive ? ' https://vercel.live https://vercel.com' : ''}`,
-              `font-src 'self' data:${allowVercelLive ? ' https://vercel.live https://assets.vercel.com' : ''}`,
+              "img-src 'self' data: blob:",
+              "font-src 'self' data:",
               `connect-src 'self'${isDev ? ' ws: wss:' : ''}${allowVercelLive ? ' https://vercel.live wss://ws-us3.pusher.com' : ''}`,
-              // Allow workers from blob URLs (needed for canvas-confetti and Next.js)
-              "worker-src 'self' blob: 'unsafe-eval'",
               // Vercel Live needs to embed feedback iframe
               allowVercelLive ? "frame-src https://vercel.live" : "frame-src 'none'",
               "object-src 'none'",
