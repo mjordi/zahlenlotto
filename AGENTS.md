@@ -103,17 +103,23 @@ Cards follow traditional Tombola/Bingo format:
 
 The app supports shareable URLs for game sessions:
 - **Session data** is encoded in URL parameters:
-  - `s`: Session seed (8-char alphanumeric)
-  - `p`: Number of players (1-20)
-  - `c`: Cards per player (1-10)
+  - `s`: Session seed (8-char alphanumeric) - required
+  - `d`: Drawn numbers (comma-separated, optional)
+  - `p`: Number of players (1-20, optional)
+  - `c`: Cards per player (1-10, optional)
   - `n`: Player names (comma-separated, optional)
-- **Example URL**: `https://example.com/?s=abc12345&p=2&c=3&n=Alice,Bob`
+- **Draw-only sessions**: Can share just the draw without cards (only `s` and `d` params)
+- **Example URLs**:
+  - With cards: `https://example.com/?s=abc12345&d=1,42,88&p=2&c=3&n=Alice,Bob`
+  - Draw-only: `https://example.com/?s=abc12345&d=1,42,88`
+- **Real-time sync**: Uses BroadcastChannel API for syncing across browser tabs
 - **Session utilities** in `src/utils/session.ts`:
   - `generateSessionSeed()`: Generate random 8-char seed
   - `generateLottoCardWithSeed(seed, index)`: Deterministic card generation
   - `encodeSessionToParams(session)`: Encode to URLSearchParams
   - `decodeSessionFromParams(params)`: Decode from URLSearchParams
   - `createShareableUrl(session)`: Create full shareable URL
+  - `SessionSync` class: BroadcastChannel wrapper for real-time sync
 
 ### 7. Git Workflow
 

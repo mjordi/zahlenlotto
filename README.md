@@ -24,8 +24,10 @@ A modern web application for generating traditional 90-number Tombola/Bingo card
 
 ### 🔗 Shareable Game Sessions
 - **Generate shareable URLs** to invite other players
-- All players get the **same cards** from a shared link
-- Session data encoded in URL (seed, player count, cards per player, names)
+- Share **with or without cards** - draw-only sessions supported
+- All players get the **same cards and drawn numbers** from a shared link
+- **Real-time sync across browser tabs** via BroadcastChannel API
+- Session data encoded in URL (seed, drawn numbers, cards config)
 - One-click copy to clipboard
 
 ### 🌍 Multi-Language Support

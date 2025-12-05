@@ -114,9 +114,10 @@ describe('session utilities', () => {
     });
 
     describe('encodeSessionToParams', () => {
-        it('should encode basic session data', () => {
+        it('should encode session data with cards', () => {
             const session: SessionData = {
                 seed: 'abc123',
+                drawnNumbers: [1, 42, 88],
                 numberOfPlayers: 2,
                 cardsPerPlayer: 3,
                 playerNames: ['Alice', 'Bob'],
@@ -124,14 +125,41 @@ describe('session utilities', () => {
 
             const params = encodeSessionToParams(session);
             expect(params.get('s')).toBe('abc123');
+            expect(params.get('d')).toBe('1,42,88');
             expect(params.get('p')).toBe('2');
             expect(params.get('c')).toBe('3');
             expect(params.get('n')).toBe('Alice,Bob');
         });
 
+        it('should encode draw-only session (no cards)', () => {
+            const session: SessionData = {
+                seed: 'drawOnly',
+                drawnNumbers: [5, 10, 15],
+            };
+
+            const params = encodeSessionToParams(session);
+            expect(params.get('s')).toBe('drawOnly');
+            expect(params.get('d')).toBe('5,10,15');
+            expect(params.has('p')).toBe(false);
+            expect(params.has('c')).toBe(false);
+        });
+
+        it('should not include drawn numbers when empty', () => {
+            const session: SessionData = {
+                seed: 'noDrawn',
+                drawnNumbers: [],
+                numberOfPlayers: 2,
+                cardsPerPlayer: 1,
+            };
+
+            const params = encodeSessionToParams(session);
+            expect(params.has('d')).toBe(false);
+        });
+
         it('should not include names param when all names are empty', () => {
             const session: SessionData = {
                 seed: 'xyz789',
+                drawnNumbers: [],
                 numberOfPlayers: 2,
                 cardsPerPlayer: 1,
                 playerNames: ['', ''],
@@ -144,6 +172,7 @@ describe('session utilities', () => {
         it('should only include non-empty names', () => {
             const session: SessionData = {
                 seed: 'test123',
+                drawnNumbers: [],
                 numberOfPlayers: 3,
                 cardsPerPlayer: 1,
                 playerNames: ['Alice', '', 'Charlie'],
@@ -155,15 +184,35 @@ describe('session utilities', () => {
     });
 
     describe('decodeSessionFromParams', () => {
-        it('should decode valid session params', () => {
-            const params = new URLSearchParams('s=abc123&p=2&c=3&n=Alice,Bob');
+        it('should decode session with cards and drawn numbers', () => {
+            const params = new URLSearchParams('s=abc123&d=1,42,88&p=2&c=3&n=Alice,Bob');
             const session = decodeSessionFromParams(params);
 
             expect(session).not.toBeNull();
             expect(session!.seed).toBe('abc123');
+            expect(session!.drawnNumbers).toEqual([1, 42, 88]);
             expect(session!.numberOfPlayers).toBe(2);
             expect(session!.cardsPerPlayer).toBe(3);
             expect(session!.playerNames).toEqual(['Alice', 'Bob']);
+        });
+
+        it('should decode draw-only session (no cards)', () => {
+            const params = new URLSearchParams('s=drawOnly&d=5,10,15');
+            const session = decodeSessionFromParams(params);
+
+            expect(session).not.toBeNull();
+            expect(session!.seed).toBe('drawOnly');
+            expect(session!.drawnNumbers).toEqual([5, 10, 15]);
+            expect(session!.numberOfPlayers).toBeUndefined();
+            expect(session!.cardsPerPlayer).toBeUndefined();
+        });
+
+        it('should decode session with no drawn numbers', () => {
+            const params = new URLSearchParams('s=noDrawn&p=2&c=3');
+            const session = decodeSessionFromParams(params);
+
+            expect(session).not.toBeNull();
+            expect(session!.drawnNumbers).toEqual([]);
         });
 
         it('should return null for missing seed', () => {
@@ -171,33 +220,43 @@ describe('session utilities', () => {
             expect(decodeSessionFromParams(params)).toBeNull();
         });
 
-        it('should return null for missing player count', () => {
-            const params = new URLSearchParams('s=abc123&c=3');
-            expect(decodeSessionFromParams(params)).toBeNull();
+        it('should decode session without card config when only seed present', () => {
+            const params = new URLSearchParams('s=seedOnly');
+            const session = decodeSessionFromParams(params);
+
+            expect(session).not.toBeNull();
+            expect(session!.seed).toBe('seedOnly');
+            expect(session!.drawnNumbers).toEqual([]);
+            expect(session!.numberOfPlayers).toBeUndefined();
         });
 
-        it('should return null for missing cards per player', () => {
-            const params = new URLSearchParams('s=abc123&p=2');
-            expect(decodeSessionFromParams(params)).toBeNull();
+        it('should ignore invalid drawn numbers', () => {
+            const params = new URLSearchParams('s=test&d=1,invalid,42,0,91');
+            const session = decodeSessionFromParams(params);
+
+            expect(session).not.toBeNull();
+            expect(session!.drawnNumbers).toEqual([1, 42]); // Only valid 1-90 numbers
         });
 
-        it('should return null for invalid player count', () => {
-            const params = new URLSearchParams('s=abc123&p=invalid&c=3');
-            expect(decodeSessionFromParams(params)).toBeNull();
+        it('should ignore card config if incomplete', () => {
+            const params = new URLSearchParams('s=abc123&p=2'); // missing c
+            const session = decodeSessionFromParams(params);
+
+            expect(session).not.toBeNull();
+            expect(session!.numberOfPlayers).toBeUndefined();
+            expect(session!.cardsPerPlayer).toBeUndefined();
         });
 
-        it('should return null for player count out of range', () => {
+        it('should ignore card config if out of range', () => {
             const params1 = new URLSearchParams('s=abc123&p=0&c=3');
-            const params2 = new URLSearchParams('s=abc123&p=21&c=3');
-            expect(decodeSessionFromParams(params1)).toBeNull();
-            expect(decodeSessionFromParams(params2)).toBeNull();
-        });
+            const session1 = decodeSessionFromParams(params1);
+            expect(session1).not.toBeNull();
+            expect(session1!.numberOfPlayers).toBeUndefined();
 
-        it('should return null for cards per player out of range', () => {
-            const params1 = new URLSearchParams('s=abc123&p=2&c=0');
             const params2 = new URLSearchParams('s=abc123&p=2&c=11');
-            expect(decodeSessionFromParams(params1)).toBeNull();
-            expect(decodeSessionFromParams(params2)).toBeNull();
+            const session2 = decodeSessionFromParams(params2);
+            expect(session2).not.toBeNull();
+            expect(session2!.cardsPerPlayer).toBeUndefined();
         });
 
         it('should fill missing player names with empty strings', () => {
@@ -206,9 +265,9 @@ describe('session utilities', () => {
 
             expect(session).not.toBeNull();
             expect(session!.playerNames).toHaveLength(3);
-            expect(session!.playerNames[0]).toBe('Alice');
-            expect(session!.playerNames[1]).toBe('');
-            expect(session!.playerNames[2]).toBe('');
+            expect(session!.playerNames![0]).toBe('Alice');
+            expect(session!.playerNames![1]).toBe('');
+            expect(session!.playerNames![2]).toBe('');
         });
 
         it('should handle no names param', () => {
@@ -225,6 +284,7 @@ describe('session utilities', () => {
         it('should create a shareable URL with session params', () => {
             const session: SessionData = {
                 seed: 'test123',
+                drawnNumbers: [1, 2, 3],
                 numberOfPlayers: 2,
                 cardsPerPlayer: 3,
                 playerNames: ['Alice', 'Bob'],
@@ -234,14 +294,29 @@ describe('session utilities', () => {
             // Check for expected URL structure (origin may vary in test environment)
             expect(url).toContain('/?');
             expect(url).toContain('s=test123');
+            expect(url).toContain('d=1%2C2%2C3'); // Comma is URL-encoded
             expect(url).toContain('p=2');
             expect(url).toContain('c=3');
-            expect(url).toContain('n=Alice%2CBob'); // Comma is URL-encoded
+            expect(url).toContain('n=Alice%2CBob');
+        });
+
+        it('should create URL for draw-only session', () => {
+            const session: SessionData = {
+                seed: 'drawOnly',
+                drawnNumbers: [42, 88],
+            };
+
+            const url = createShareableUrl(session);
+            expect(url).toContain('s=drawOnly');
+            expect(url).toContain('d=42%2C88');
+            expect(url).not.toContain('p=');
+            expect(url).not.toContain('c=');
         });
 
         it('should include the window origin in the URL', () => {
             const session: SessionData = {
                 seed: 'origin123',
+                drawnNumbers: [],
                 numberOfPlayers: 1,
                 cardsPerPlayer: 1,
                 playerNames: [],
@@ -257,6 +332,7 @@ describe('session utilities', () => {
         it('should preserve session data through encode/decode cycle', () => {
             const original: SessionData = {
                 seed: 'roundTrip123',
+                drawnNumbers: [1, 23, 45, 67, 89],
                 numberOfPlayers: 4,
                 cardsPerPlayer: 2,
                 playerNames: ['Alice', 'Bob', 'Charlie', 'Diana'],
@@ -267,14 +343,31 @@ describe('session utilities', () => {
 
             expect(decoded).not.toBeNull();
             expect(decoded!.seed).toBe(original.seed);
+            expect(decoded!.drawnNumbers).toEqual(original.drawnNumbers);
             expect(decoded!.numberOfPlayers).toBe(original.numberOfPlayers);
             expect(decoded!.cardsPerPlayer).toBe(original.cardsPerPlayer);
             expect(decoded!.playerNames).toEqual(original.playerNames);
         });
 
+        it('should preserve draw-only session through encode/decode cycle', () => {
+            const original: SessionData = {
+                seed: 'drawOnlyTrip',
+                drawnNumbers: [10, 20, 30, 40, 50],
+            };
+
+            const params = encodeSessionToParams(original);
+            const decoded = decodeSessionFromParams(params);
+
+            expect(decoded).not.toBeNull();
+            expect(decoded!.seed).toBe(original.seed);
+            expect(decoded!.drawnNumbers).toEqual(original.drawnNumbers);
+            expect(decoded!.numberOfPlayers).toBeUndefined();
+        });
+
         it('should generate consistent cards after URL round-trip', () => {
             const session: SessionData = {
                 seed: 'consistentSeed',
+                drawnNumbers: [],
                 numberOfPlayers: 2,
                 cardsPerPlayer: 2,
                 playerNames: ['P1', 'P2'],
@@ -283,8 +376,8 @@ describe('session utilities', () => {
             // Generate original cards
             const originalCards = [];
             let cardId = 1;
-            for (let i = 0; i < session.numberOfPlayers; i++) {
-                for (let j = 0; j < session.cardsPerPlayer; j++) {
+            for (let i = 0; i < session.numberOfPlayers!; i++) {
+                for (let j = 0; j < session.cardsPerPlayer!; j++) {
                     originalCards.push(generateLottoCardWithSeed(session.seed, cardId++));
                 }
             }
@@ -296,8 +389,8 @@ describe('session utilities', () => {
             // Generate cards from decoded session
             const decodedCards = [];
             cardId = 1;
-            for (let i = 0; i < decoded!.numberOfPlayers; i++) {
-                for (let j = 0; j < decoded!.cardsPerPlayer; j++) {
+            for (let i = 0; i < decoded!.numberOfPlayers!; i++) {
+                for (let j = 0; j < decoded!.cardsPerPlayer!; j++) {
                     decodedCards.push(generateLottoCardWithSeed(decoded!.seed, cardId++));
                 }
             }

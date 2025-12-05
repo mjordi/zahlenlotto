@@ -1,18 +1,32 @@
 /**
  * Session management utilities for shareable game URLs.
  * Uses a seeded PRNG to generate deterministic card layouts that can be recreated from a URL.
+ * Supports real-time sync across browser tabs via BroadcastChannel.
  */
 
 import { LottoCard } from './lotto';
 
 /**
  * Session data that can be encoded in a URL.
+ * Card configuration is optional - sessions can be draw-only.
  */
 export interface SessionData {
     seed: string;
-    numberOfPlayers: number;
-    cardsPerPlayer: number;
-    playerNames: string[];
+    drawnNumbers: number[];
+    // Card configuration is optional
+    numberOfPlayers?: number;
+    cardsPerPlayer?: number;
+    playerNames?: string[];
+}
+
+/**
+ * Message types for BroadcastChannel sync.
+ */
+export interface SyncMessage {
+    type: 'NUMBER_DRAWN' | 'RESET' | 'SYNC_REQUEST' | 'SYNC_RESPONSE';
+    seed: string;
+    drawnNumbers: number[];
+    currentNumber?: number | null;
 }
 
 /**
@@ -133,18 +147,44 @@ export function generateLottoCardWithSeed(seed: string, cardIndex: number): Lott
 }
 
 /**
+ * Encodes drawn numbers as a compact string (comma-separated).
+ */
+function encodeDrawnNumbers(numbers: number[]): string {
+    return numbers.join(',');
+}
+
+/**
+ * Decodes drawn numbers from a compact string.
+ */
+function decodeDrawnNumbers(str: string): number[] {
+    if (!str) return [];
+    return str.split(',').map(n => parseInt(n, 10)).filter(n => !isNaN(n) && n >= 1 && n <= 90);
+}
+
+/**
  * Encodes session data into URL search params.
  */
 export function encodeSessionToParams(session: SessionData): URLSearchParams {
     const params = new URLSearchParams();
     params.set('s', session.seed);
-    params.set('p', session.numberOfPlayers.toString());
-    params.set('c', session.cardsPerPlayer.toString());
 
-    // Only include non-empty player names
-    const nonEmptyNames = session.playerNames.filter(name => name.trim() !== '');
-    if (nonEmptyNames.length > 0) {
-        params.set('n', nonEmptyNames.join(','));
+    // Encode drawn numbers
+    if (session.drawnNumbers.length > 0) {
+        params.set('d', encodeDrawnNumbers(session.drawnNumbers));
+    }
+
+    // Card configuration is optional
+    if (session.numberOfPlayers !== undefined && session.cardsPerPlayer !== undefined) {
+        params.set('p', session.numberOfPlayers.toString());
+        params.set('c', session.cardsPerPlayer.toString());
+
+        // Only include non-empty player names
+        if (session.playerNames) {
+            const nonEmptyNames = session.playerNames.filter(name => name.trim() !== '');
+            if (nonEmptyNames.length > 0) {
+                params.set('n', nonEmptyNames.join(','));
+            }
+        }
     }
 
     return params;
@@ -152,48 +192,62 @@ export function encodeSessionToParams(session: SessionData): URLSearchParams {
 
 /**
  * Decodes session data from URL search params.
- * Returns null if required params are missing or invalid.
+ * Returns null if seed is missing.
  */
 export function decodeSessionFromParams(params: URLSearchParams): SessionData | null {
     const seed = params.get('s');
+
+    if (!seed) {
+        return null;
+    }
+
+    // Decode drawn numbers
+    const drawnStr = params.get('d');
+    const drawnNumbers = drawnStr ? decodeDrawnNumbers(drawnStr) : [];
+
+    // Card configuration is optional
     const playersStr = params.get('p');
     const cardsStr = params.get('c');
     const namesStr = params.get('n');
 
-    if (!seed || !playersStr || !cardsStr) {
-        return null;
-    }
+    let numberOfPlayers: number | undefined;
+    let cardsPerPlayer: number | undefined;
+    let playerNames: string[] | undefined;
 
-    const numberOfPlayers = parseInt(playersStr, 10);
-    const cardsPerPlayer = parseInt(cardsStr, 10);
+    if (playersStr && cardsStr) {
+        numberOfPlayers = parseInt(playersStr, 10);
+        cardsPerPlayer = parseInt(cardsStr, 10);
 
-    if (isNaN(numberOfPlayers) || isNaN(cardsPerPlayer)) {
-        return null;
-    }
-
-    if (numberOfPlayers < 1 || numberOfPlayers > 20) {
-        return null;
-    }
-
-    if (cardsPerPlayer < 1 || cardsPerPlayer > 10) {
-        return null;
-    }
-
-    // Parse player names, filling with empty strings for missing names
-    const playerNames: string[] = [];
-    if (namesStr) {
-        const names = namesStr.split(',');
-        for (let i = 0; i < numberOfPlayers; i++) {
-            playerNames.push(names[i] || '');
-        }
-    } else {
-        for (let i = 0; i < numberOfPlayers; i++) {
-            playerNames.push('');
+        if (isNaN(numberOfPlayers) || isNaN(cardsPerPlayer)) {
+            numberOfPlayers = undefined;
+            cardsPerPlayer = undefined;
+        } else {
+            if (numberOfPlayers < 1 || numberOfPlayers > 20) {
+                numberOfPlayers = undefined;
+                cardsPerPlayer = undefined;
+            } else if (cardsPerPlayer < 1 || cardsPerPlayer > 10) {
+                numberOfPlayers = undefined;
+                cardsPerPlayer = undefined;
+            } else {
+                // Parse player names
+                playerNames = [];
+                if (namesStr) {
+                    const names = namesStr.split(',');
+                    for (let i = 0; i < numberOfPlayers; i++) {
+                        playerNames.push(names[i] || '');
+                    }
+                } else {
+                    for (let i = 0; i < numberOfPlayers; i++) {
+                        playerNames.push('');
+                    }
+                }
+            }
         }
     }
 
     return {
         seed,
+        drawnNumbers,
         numberOfPlayers,
         cardsPerPlayer,
         playerNames,
@@ -215,7 +269,7 @@ export function createShareableUrl(session: SessionData): string {
 export function hasSessionInUrl(): boolean {
     if (typeof window === 'undefined') return false;
     const params = new URLSearchParams(window.location.search);
-    return params.has('s') && params.has('p') && params.has('c');
+    return params.has('s'); // Only seed is required
 }
 
 /**
@@ -225,4 +279,145 @@ export function getSessionFromUrl(): SessionData | null {
     if (typeof window === 'undefined') return null;
     const params = new URLSearchParams(window.location.search);
     return decodeSessionFromParams(params);
+}
+
+/**
+ * BroadcastChannel manager for real-time sync across browser tabs.
+ */
+export class SessionSync {
+    private channel: BroadcastChannel | null = null;
+    private seed: string;
+    private onNumberDrawn: (numbers: number[], current: number | null) => void;
+    private onReset: () => void;
+    private onSyncResponse: (numbers: number[], current: number | null) => void;
+    private isHost: boolean;
+
+    constructor(
+        seed: string,
+        callbacks: {
+            onNumberDrawn: (numbers: number[], current: number | null) => void;
+            onReset: () => void;
+            onSyncResponse: (numbers: number[], current: number | null) => void;
+        },
+        isHost: boolean = false
+    ) {
+        this.seed = seed;
+        this.onNumberDrawn = callbacks.onNumberDrawn;
+        this.onReset = callbacks.onReset;
+        this.onSyncResponse = callbacks.onSyncResponse;
+        this.isHost = isHost;
+
+        if (typeof window !== 'undefined' && 'BroadcastChannel' in window) {
+            this.channel = new BroadcastChannel(`zahlenlotto-${seed}`);
+            this.channel.onmessage = this.handleMessage.bind(this);
+        }
+    }
+
+    private handleMessage(event: MessageEvent<SyncMessage>) {
+        const message = event.data;
+
+        // Ignore messages for different sessions
+        if (message.seed !== this.seed) return;
+
+        switch (message.type) {
+            case 'NUMBER_DRAWN':
+                this.onNumberDrawn(message.drawnNumbers, message.currentNumber ?? null);
+                break;
+            case 'RESET':
+                this.onReset();
+                break;
+            case 'SYNC_REQUEST':
+                // Host responds to sync requests
+                // This is handled by the component
+                break;
+            case 'SYNC_RESPONSE':
+                this.onSyncResponse(message.drawnNumbers, message.currentNumber ?? null);
+                break;
+        }
+    }
+
+    /**
+     * Broadcast a number drawn event.
+     */
+    broadcastNumberDrawn(drawnNumbers: number[], currentNumber: number | null) {
+        if (!this.channel) return;
+        const message: SyncMessage = {
+            type: 'NUMBER_DRAWN',
+            seed: this.seed,
+            drawnNumbers,
+            currentNumber,
+        };
+        this.channel.postMessage(message);
+    }
+
+    /**
+     * Broadcast a reset event.
+     */
+    broadcastReset() {
+        if (!this.channel) return;
+        const message: SyncMessage = {
+            type: 'RESET',
+            seed: this.seed,
+            drawnNumbers: [],
+            currentNumber: null,
+        };
+        this.channel.postMessage(message);
+    }
+
+    /**
+     * Request sync from host (for new joiners).
+     */
+    requestSync() {
+        if (!this.channel) return;
+        const message: SyncMessage = {
+            type: 'SYNC_REQUEST',
+            seed: this.seed,
+            drawnNumbers: [],
+        };
+        this.channel.postMessage(message);
+    }
+
+    /**
+     * Respond to sync request (host only).
+     */
+    respondToSync(drawnNumbers: number[], currentNumber: number | null) {
+        if (!this.channel || !this.isHost) return;
+        const message: SyncMessage = {
+            type: 'SYNC_RESPONSE',
+            seed: this.seed,
+            drawnNumbers,
+            currentNumber,
+        };
+        this.channel.postMessage(message);
+    }
+
+    /**
+     * Set up listener for sync requests (host only).
+     */
+    listenForSyncRequests(getCurrentState: () => { drawnNumbers: number[]; currentNumber: number | null }) {
+        if (!this.channel || !this.isHost) return;
+
+        const channel = this.channel;
+        const originalHandler = channel.onmessage;
+        channel.onmessage = (event: MessageEvent<SyncMessage>) => {
+            if (event.data.type === 'SYNC_REQUEST' && event.data.seed === this.seed) {
+                const state = getCurrentState();
+                this.respondToSync(state.drawnNumbers, state.currentNumber);
+            }
+            // Still call original handler for other messages
+            if (originalHandler) {
+                originalHandler.call(channel, event);
+            }
+        };
+    }
+
+    /**
+     * Clean up the channel.
+     */
+    destroy() {
+        if (this.channel) {
+            this.channel.close();
+            this.channel = null;
+        }
+    }
 }

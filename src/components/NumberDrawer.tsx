@@ -11,6 +11,7 @@ import {
     generateSessionSeed,
     generateLottoCardWithSeed,
     createShareableUrl,
+    SessionSync,
 } from '@/utils/session';
 
 interface NumberDrawerProps {
@@ -57,6 +58,10 @@ export default function NumberDrawer({
     const [celebratingPlayers, setCelebratingPlayers] = useState<string[]>([]);
     const [newlyCompletedRowsByCard, setNewlyCompletedRowsByCard] = useState<Map<number, number[]>>(new Map());
     const [linkCopied, setLinkCopied] = useState(false);
+
+    // Session sync for real-time updates across browser tabs
+    const sessionSyncRef = useRef<SessionSync | null>(null);
+    const isHostRef = useRef(!joinedFromUrl); // Host is the one who started the session
 
     // Audio Context initialisieren
     const initAudio = useCallback(() => {
@@ -182,6 +187,17 @@ export default function NumberDrawer({
 
         if (availableNumbers.length === 0) return;
 
+        // Create a session if this is the first draw and no session exists
+        if (!sessionData) {
+            const seed = generateSessionSeed();
+            const newSession: SessionData = {
+                seed,
+                drawnNumbers: [],
+            };
+            setSessionData(newSession);
+            isHostRef.current = true;
+        }
+
         initAudio();
         setIsAnimating(true);
         const randomNumber = availableNumbers[Math.floor(Math.random() * availableNumbers.length)];
@@ -193,6 +209,9 @@ export default function NumberDrawer({
             setJustDrawn(randomNumber);
             setIsAnimating(false);
 
+            // Broadcast to other tabs
+            sessionSyncRef.current?.broadcastNumberDrawn(newDrawnNumbers, randomNumber);
+
             // Sound abspielen
             playSound(523.25 + (randomNumber * 5), 0.2);
 
@@ -202,7 +221,7 @@ export default function NumberDrawer({
             // Just-drawn Animation entfernen
             setTimeout(() => setJustDrawn(null), 500);
         }, 300);
-    }, [drawnNumbers, isAnimating, initAudio, playSound, setCurrentNumber, setDrawnNumbers, checkRowCompletion]);
+    }, [drawnNumbers, isAnimating, initAudio, playSound, setCurrentNumber, setDrawnNumbers, checkRowCompletion, sessionData, setSessionData]);
 
     // Reset mit Bestätigung
     const reset = useCallback(() => {
@@ -218,6 +237,9 @@ export default function NumberDrawer({
         setShowCelebration(false);
         setNewlyCompletedRowsByCard(new Map());
         previousDrawnRef.current = [];
+
+        // Broadcast reset to other tabs
+        sessionSyncRef.current?.broadcastReset();
     }, [drawnNumbers.length, t.confirmRestart, setDrawnNumbers, setCurrentNumber]);
 
     // Tastatursteuerung
@@ -256,6 +278,56 @@ export default function NumberDrawer({
         });
     }, [numberOfPlayers]);
 
+    // Initialize BroadcastChannel sync when session exists
+    useEffect(() => {
+        if (!sessionData?.seed) return;
+
+        const sync = new SessionSync(
+            sessionData.seed,
+            {
+                onNumberDrawn: (numbers, current) => {
+                    // Only update if we're not the host (avoid echo)
+                    if (!isHostRef.current) {
+                        setDrawnNumbers(numbers);
+                        setCurrentNumber(current);
+                    }
+                },
+                onReset: () => {
+                    if (!isHostRef.current) {
+                        setDrawnNumbers([]);
+                        setCurrentNumber(null);
+                    }
+                },
+                onSyncResponse: (numbers, current) => {
+                    // New joiner receives current state
+                    if (!isHostRef.current) {
+                        setDrawnNumbers(numbers);
+                        setCurrentNumber(current);
+                    }
+                },
+            },
+            isHostRef.current
+        );
+
+        sessionSyncRef.current = sync;
+
+        // Host listens for sync requests
+        if (isHostRef.current) {
+            sync.listenForSyncRequests(() => ({
+                drawnNumbers,
+                currentNumber,
+            }));
+        } else {
+            // New joiner requests current state
+            sync.requestSync();
+        }
+
+        return () => {
+            sync.destroy();
+            sessionSyncRef.current = null;
+        };
+    }, [sessionData?.seed, setDrawnNumbers, setCurrentNumber]);
+
     const isNumberDrawn = (num: number) => drawnNumbers.includes(num);
     const remainingNumbers = TOTAL_NUMBERS - drawnNumbers.length;
 
@@ -263,15 +335,17 @@ export default function NumberDrawer({
     const generateCards = useCallback(() => {
         setIsGenerating(true);
         setTimeout(() => {
-            // Generate a new session seed
-            const seed = generateSessionSeed();
+            // Generate a new session seed (or reuse existing if already in a draw-only session)
+            const seed = sessionData?.seed || generateSessionSeed();
             const newSession: SessionData = {
                 seed,
+                drawnNumbers,
                 numberOfPlayers,
                 cardsPerPlayer,
                 playerNames: playerNames.slice(0, numberOfPlayers),
             };
             setSessionData(newSession);
+            isHostRef.current = true; // Generating cards makes you the host
 
             const cards: Card[] = [];
             let cardId = 1;
@@ -288,7 +362,7 @@ export default function NumberDrawer({
             setGeneratedCards(cards);
             setIsGenerating(false);
         }, 100);
-    }, [numberOfPlayers, cardsPerPlayer, playerNames, t.playerLabel, setGeneratedCards, setSessionData]);
+    }, [numberOfPlayers, cardsPerPlayer, playerNames, t.playerLabel, setGeneratedCards, setSessionData, sessionData?.seed, drawnNumbers]);
 
     // Export to PDF function
     const exportToPDF = useCallback(() => {
@@ -307,7 +381,13 @@ export default function NumberDrawer({
     const copyShareLink = useCallback(async () => {
         if (!sessionData) return;
 
-        const url = createShareableUrl(sessionData);
+        // Include current drawn numbers in the shareable URL
+        const sessionWithCurrentState: SessionData = {
+            ...sessionData,
+            drawnNumbers,
+        };
+
+        const url = createShareableUrl(sessionWithCurrentState);
         try {
             await navigator.clipboard.writeText(url);
             setLinkCopied(true);
@@ -323,7 +403,7 @@ export default function NumberDrawer({
             setLinkCopied(true);
             setTimeout(() => setLinkCopied(false), 2000);
         }
-    }, [sessionData]);
+    }, [sessionData, drawnNumbers]);
 
     return (
         <div className="w-full max-w-6xl mx-auto space-y-6 relative">
@@ -370,6 +450,20 @@ export default function NumberDrawer({
                     >
                         {t.restart}
                     </button>
+                    {sessionData && (
+                        <button
+                            onClick={copyShareLink}
+                            className="px-8 py-4 bg-blue-700 hover:bg-blue-600 text-white font-semibold rounded-xl transition-all duration-300 shadow-lg shadow-blue-500/20 hover:shadow-blue-500/40 active:scale-95 flex items-center gap-2"
+                            title={t.shareGameDescription}
+                        >
+                            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                                <path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"></path>
+                                <polyline points="16 6 12 2 8 6"></polyline>
+                                <line x1="12" y1="2" x2="12" y2="15"></line>
+                            </svg>
+                            {linkCopied ? t.linkCopied : t.shareGame}
+                        </button>
+                    )}
                 </div>
 
                 {/* Tastatur-Hinweis & Sound */}

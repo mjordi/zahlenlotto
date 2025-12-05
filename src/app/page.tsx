@@ -30,20 +30,28 @@ export default function Home() {
             setSessionData(urlSession);
             setJoinedFromUrl(true);
 
-            // Generate cards from the session seed
-            const cards: Card[] = [];
-            let cardId = 1;
-            for (let playerIdx = 0; playerIdx < urlSession.numberOfPlayers; playerIdx++) {
-                for (let cardNum = 0; cardNum < urlSession.cardsPerPlayer; cardNum++) {
-                    cards.push({
-                        id: cardId,
-                        grid: generateLottoCardWithSeed(urlSession.seed, cardId),
-                        playerName: urlSession.playerNames[playerIdx]?.trim() || `${t.playerLabel} ${playerIdx + 1}`,
-                    });
-                    cardId++;
-                }
+            // Restore drawn numbers from URL
+            if (urlSession.drawnNumbers.length > 0) {
+                setDrawnNumbers(urlSession.drawnNumbers);
+                setCurrentNumber(urlSession.drawnNumbers[urlSession.drawnNumbers.length - 1]);
             }
-            setGeneratedCards(cards);
+
+            // Generate cards from the session seed (only if card config is present)
+            if (urlSession.numberOfPlayers && urlSession.cardsPerPlayer) {
+                const cards: Card[] = [];
+                let cardId = 1;
+                for (let playerIdx = 0; playerIdx < urlSession.numberOfPlayers; playerIdx++) {
+                    for (let cardNum = 0; cardNum < urlSession.cardsPerPlayer; cardNum++) {
+                        cards.push({
+                            id: cardId,
+                            grid: generateLottoCardWithSeed(urlSession.seed, cardId),
+                            playerName: urlSession.playerNames?.[playerIdx]?.trim() || `${t.playerLabel} ${playerIdx + 1}`,
+                        });
+                        cardId++;
+                    }
+                }
+                setGeneratedCards(cards);
+            }
 
             // Clear URL params after loading to keep URL clean during gameplay
             window.history.replaceState({}, '', window.location.pathname);
