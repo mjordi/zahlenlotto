@@ -320,7 +320,7 @@ export default function NumberDrawer({
                     </button>
                     <button
                         onClick={reset}
-                        className="px-8 py-4 bg-red-600 hover:bg-red-500 text-white font-semibold rounded-xl transition-all duration-300 shadow-lg shadow-red-500/20 hover:shadow-red-500/40 active:scale-95 border border-white/10"
+                        className="btn-danger px-8 py-4 text-lg"
                     >
                         {t.restart}
                     </button>
@@ -418,7 +418,7 @@ export default function NumberDrawer({
                                 <button
                                     onClick={exportToPDF}
                                     disabled={isExporting}
-                                    className="px-4 py-1 bg-emerald-700 hover:bg-emerald-600 text-white text-sm font-semibold rounded-lg transition-all duration-300 shadow-lg shadow-emerald-500/20 hover:shadow-emerald-500/40 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
+                                    className="btn-success text-sm"
                                 >
                                     {isExporting ? t.creatingPdf : t.downloadPdf}
                                 </button>
@@ -502,7 +502,7 @@ export default function NumberDrawer({
                                     <button
                                         onClick={generateCards}
                                         disabled={isGenerating}
-                                        className="w-full px-6 py-3 bg-amber-600 hover:bg-amber-500 text-white font-semibold rounded-xl transition-all duration-300 shadow-lg shadow-amber-500/20 hover:shadow-amber-500/40 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
+                                        className="btn-warning w-full"
                                         aria-label={isGenerating ? t.generating : t.generateCards}
                                     >
                                         {isGenerating ? t.generating : t.generateCards}
