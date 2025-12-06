@@ -11,8 +11,8 @@ import {
     generateSessionSeed,
     generateLottoCardWithSeed,
     createShareableUrl,
-    SessionSync,
 } from '@/utils/session';
+import { useGameSync } from '@/hooks/useGameSync';
 
 interface NumberDrawerProps {
     drawnNumbers: number[];
@@ -59,9 +59,24 @@ export default function NumberDrawer({
     const [newlyCompletedRowsByCard, setNewlyCompletedRowsByCard] = useState<Map<number, number[]>>(new Map());
     const [linkCopied, setLinkCopied] = useState(false);
 
-    // Session sync for real-time updates across browser tabs
-    const sessionSyncRef = useRef<SessionSync | null>(null);
-    const isHostRef = useRef(!joinedFromUrl); // Host is the one who started the session
+    // Track if we are the host (who started the session)
+    const [isHost, setIsHost] = useState(!joinedFromUrl);
+
+    // Cross-device sync using the API + BroadcastChannel
+    const { pushState, resetState } = useGameSync({
+        seed: sessionData?.seed || null,
+        isHost,
+        enabled: !!sessionData?.seed,
+        pollingInterval: 2000,
+        onStateUpdate: useCallback((numbers: number[], current: number | null) => {
+            setDrawnNumbers(numbers);
+            setCurrentNumber(current);
+        }, [setDrawnNumbers, setCurrentNumber]),
+        onReset: useCallback(() => {
+            setDrawnNumbers([]);
+            setCurrentNumber(null);
+        }, [setDrawnNumbers, setCurrentNumber]),
+    });
 
     // Audio Context initialisieren
     const initAudio = useCallback(() => {
@@ -195,7 +210,7 @@ export default function NumberDrawer({
                 drawnNumbers: [],
             };
             setSessionData(newSession);
-            isHostRef.current = true;
+            setIsHost(true);
         }
 
         initAudio();
@@ -209,8 +224,8 @@ export default function NumberDrawer({
             setJustDrawn(randomNumber);
             setIsAnimating(false);
 
-            // Broadcast to other tabs
-            sessionSyncRef.current?.broadcastNumberDrawn(newDrawnNumbers, randomNumber);
+            // Push state to server for cross-device sync (also broadcasts to same-browser tabs)
+            pushState(newDrawnNumbers, randomNumber);
 
             // Sound abspielen
             playSound(523.25 + (randomNumber * 5), 0.2);
@@ -221,7 +236,7 @@ export default function NumberDrawer({
             // Just-drawn Animation entfernen
             setTimeout(() => setJustDrawn(null), 500);
         }, 300);
-    }, [drawnNumbers, isAnimating, initAudio, playSound, setCurrentNumber, setDrawnNumbers, checkRowCompletion, sessionData, setSessionData]);
+    }, [drawnNumbers, isAnimating, initAudio, playSound, setCurrentNumber, setDrawnNumbers, checkRowCompletion, sessionData, setSessionData, pushState]);
 
     // Reset mit Bestätigung
     const reset = useCallback(() => {
@@ -238,9 +253,9 @@ export default function NumberDrawer({
         setNewlyCompletedRowsByCard(new Map());
         previousDrawnRef.current = [];
 
-        // Broadcast reset to other tabs
-        sessionSyncRef.current?.broadcastReset();
-    }, [drawnNumbers.length, t.confirmRestart, setDrawnNumbers, setCurrentNumber]);
+        // Reset state on server (also broadcasts to same-browser tabs)
+        resetState();
+    }, [drawnNumbers.length, t.confirmRestart, setDrawnNumbers, setCurrentNumber, resetState]);
 
     // Tastatursteuerung
     useEffect(() => {
@@ -278,56 +293,6 @@ export default function NumberDrawer({
         });
     }, [numberOfPlayers]);
 
-    // Initialize BroadcastChannel sync when session exists
-    useEffect(() => {
-        if (!sessionData?.seed) return;
-
-        const sync = new SessionSync(
-            sessionData.seed,
-            {
-                onNumberDrawn: (numbers, current) => {
-                    // Only update if we're not the host (avoid echo)
-                    if (!isHostRef.current) {
-                        setDrawnNumbers(numbers);
-                        setCurrentNumber(current);
-                    }
-                },
-                onReset: () => {
-                    if (!isHostRef.current) {
-                        setDrawnNumbers([]);
-                        setCurrentNumber(null);
-                    }
-                },
-                onSyncResponse: (numbers, current) => {
-                    // New joiner receives current state
-                    if (!isHostRef.current) {
-                        setDrawnNumbers(numbers);
-                        setCurrentNumber(current);
-                    }
-                },
-            },
-            isHostRef.current
-        );
-
-        sessionSyncRef.current = sync;
-
-        // Host listens for sync requests
-        if (isHostRef.current) {
-            sync.listenForSyncRequests(() => ({
-                drawnNumbers,
-                currentNumber,
-            }));
-        } else {
-            // New joiner requests current state
-            sync.requestSync();
-        }
-
-        return () => {
-            sync.destroy();
-            sessionSyncRef.current = null;
-        };
-    }, [sessionData?.seed, setDrawnNumbers, setCurrentNumber]);
-
     const isNumberDrawn = (num: number) => drawnNumbers.includes(num);
     const remainingNumbers = TOTAL_NUMBERS - drawnNumbers.length;
 
@@ -345,7 +310,7 @@ export default function NumberDrawer({
                 playerNames: playerNames.slice(0, numberOfPlayers),
             };
             setSessionData(newSession);
-            isHostRef.current = true; // Generating cards makes you the host
+            setIsHost(true); // Generating cards makes you the host
 
             const cards: Card[] = [];
             let cardId = 1;

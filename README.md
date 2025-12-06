@@ -26,7 +26,8 @@ A modern web application for generating traditional 90-number Tombola/Bingo card
 - **Generate shareable URLs** to invite other players
 - Share **with or without cards** - draw-only sessions supported
 - All players get the **same cards and drawn numbers** from a shared link
-- **Real-time sync across browser tabs** via BroadcastChannel API
+- **Cross-device real-time sync** via polling with Vercel KV
+- **Same-browser tab sync** via BroadcastChannel API
 - Session data encoded in URL (seed, drawn numbers, cards config)
 - One-click copy to clipboard
 
@@ -123,6 +124,8 @@ npm run lint
 zahlenlotto/
 ├── src/
 │   ├── app/              # Next.js App Router
+│   │   ├── api/          # API routes
+│   │   │   └── session/  # Session sync API (GET/POST/DELETE)
 │   │   ├── page.tsx      # Main page with state management
 │   │   ├── layout.tsx    # Root layout
 │   │   └── globals.css   # Global styles
@@ -135,6 +138,8 @@ zahlenlotto/
 │   │   ├── LanguageContext.tsx
 │   │   ├── ThemeContext.tsx
 │   │   └── __tests__/    # Context tests
+│   ├── hooks/            # Custom React hooks
+│   │   └── useGameSync.ts # Cross-device sync hook
 │   └── utils/            # Utility functions
 │       ├── lotto.ts      # Card generation & row completion logic
 │       ├── session.ts    # Shareable URL session management
@@ -152,6 +157,7 @@ zahlenlotto/
 - **Styling**: Tailwind CSS 4
 - **PDF Export**: jsPDF
 - **Animations**: canvas-confetti
+- **Real-time Sync**: Vercel KV (with in-memory fallback for development)
 - **Testing**: Jest + React Testing Library
 - **Deployment**: Vercel
 

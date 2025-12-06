@@ -11,6 +11,7 @@ Zahlenlotto is a Next.js-based lottery card generator that creates traditional 9
 - **Language**: TypeScript
 - **Styling**: Tailwind CSS
 - **PDF Generation**: jsPDF
+- **Real-time Sync**: Vercel KV (with in-memory fallback)
 - **Testing**: Jest + React Testing Library
 - **Deployment**: Vercel
 
@@ -57,9 +58,13 @@ When changing functionality, update these files:
 zahlenlotto/
 ├── src/
 │   ├── app/              # Next.js App Router pages
+│   │   └── api/          # API routes
+│   │       └── session/  # Cross-device sync API
 │   ├── components/       # React components
 │   │   └── __tests__/    # Component tests
 │   ├── contexts/         # React contexts (e.g., LanguageContext)
+│   ├── hooks/            # Custom React hooks
+│   │   └── useGameSync.ts # Cross-device sync hook
 │   └── utils/            # Utility functions
 │       └── __tests__/    # Utility tests
 ├── public/               # Static assets
@@ -112,7 +117,8 @@ The app supports shareable URLs for game sessions:
 - **Example URLs**:
   - With cards: `https://example.com/?s=abc12345&d=1,42,88&p=2&c=3&n=Alice,Bob`
   - Draw-only: `https://example.com/?s=abc12345&d=1,42,88`
-- **Real-time sync**: Uses BroadcastChannel API for syncing across browser tabs
+- **Cross-device sync**: Polling with Vercel KV for state sync across different devices
+- **Same-browser sync**: Uses BroadcastChannel API for syncing across browser tabs
 - **Session utilities** in `src/utils/session.ts`:
   - `generateSessionSeed()`: Generate random 8-char seed
   - `generateLottoCardWithSeed(seed, index)`: Deterministic card generation
@@ -120,6 +126,34 @@ The app supports shareable URLs for game sessions:
   - `decodeSessionFromParams(params)`: Decode from URLSearchParams
   - `createShareableUrl(session)`: Create full shareable URL
   - `SessionSync` class: BroadcastChannel wrapper for real-time sync
+
+### 6.2 Cross-Device Sync Architecture
+
+The cross-device sync uses a polling-based approach with Vercel KV:
+
+**API Route** (`src/app/api/session/[seed]/route.ts`):
+- `GET /api/session/[seed]`: Poll for current game state
+- `POST /api/session/[seed]`: Update game state (host only)
+- `DELETE /api/session/[seed]`: Reset/clear game state
+
+**useGameSync Hook** (`src/hooks/useGameSync.ts`):
+- Hosts push state updates to server after each draw
+- Guests poll server every 2 seconds for state changes
+- Integrates BroadcastChannel for same-browser tab sync
+- Falls back to in-memory storage during development (when Vercel KV not configured)
+
+**State Structure**:
+```typescript
+interface GameState {
+    drawnNumbers: number[];
+    currentNumber: number | null;
+    lastUpdate: number; // Timestamp for change detection
+}
+```
+
+**Environment Variables** (for Vercel KV in production):
+- `KV_REST_API_URL`: Vercel KV REST API URL
+- `KV_REST_API_TOKEN`: Vercel KV authentication token
 
 ### 7. Git Workflow
 
