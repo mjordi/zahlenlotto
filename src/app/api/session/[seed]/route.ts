@@ -28,6 +28,10 @@ interface GameState {
     drawnNumbers: number[];
     currentNumber: number | null;
     lastUpdate: number;
+    // Card configuration (synced when host generates cards)
+    numberOfPlayers?: number;
+    cardsPerPlayer?: number;
+    playerNames?: string[];
 }
 
 /**
@@ -120,6 +124,17 @@ export async function POST(
             currentNumber: body.currentNumber ?? null,
             lastUpdate: Date.now(),
         };
+
+        // Include card configuration if provided
+        if (typeof body.numberOfPlayers === 'number' && body.numberOfPlayers >= 1 && body.numberOfPlayers <= 20) {
+            state.numberOfPlayers = body.numberOfPlayers;
+        }
+        if (typeof body.cardsPerPlayer === 'number' && body.cardsPerPlayer >= 1 && body.cardsPerPlayer <= 10) {
+            state.cardsPerPlayer = body.cardsPerPlayer;
+        }
+        if (Array.isArray(body.playerNames)) {
+            state.playerNames = body.playerNames.filter((n: unknown) => typeof n === 'string').slice(0, 20);
+        }
 
         const kvClient = await getKV();
 

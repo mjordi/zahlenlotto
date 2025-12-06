@@ -189,4 +189,68 @@ describe('Session API Route', () => {
             expect(data.currentNumber).toBe(3);
         });
     });
+
+    describe('Card configuration sync', () => {
+        it('should save and return card configuration', async () => {
+            const seed = 'cardConfig123';
+            const postRequest = createMockRequest({
+                drawnNumbers: [1, 2, 3],
+                currentNumber: 3,
+                numberOfPlayers: 2,
+                cardsPerPlayer: 3,
+                playerNames: ['Alice', 'Bob'],
+            });
+
+            const postResponse = await POST(postRequest as never, createParams(seed));
+            expect(postResponse.status).toBe(200);
+
+            // Verify card config is returned with GET
+            const getRequest = createMockRequest();
+            const getResponse = await GET(getRequest as never, createParams(seed));
+            const getData = await getResponse.json();
+
+            expect(getData.numberOfPlayers).toBe(2);
+            expect(getData.cardsPerPlayer).toBe(3);
+            expect(getData.playerNames).toEqual(['Alice', 'Bob']);
+        });
+
+        it('should validate numberOfPlayers range', async () => {
+            const seed = 'cardConfigRange1';
+            // numberOfPlayers = 0 should be ignored
+            const postRequest = createMockRequest({
+                drawnNumbers: [1],
+                currentNumber: 1,
+                numberOfPlayers: 0,
+                cardsPerPlayer: 3,
+            });
+
+            await POST(postRequest as never, createParams(seed));
+
+            const getRequest = createMockRequest();
+            const getResponse = await GET(getRequest as never, createParams(seed));
+            const getData = await getResponse.json();
+
+            expect(getData.numberOfPlayers).toBeUndefined();
+        });
+
+        it('should validate cardsPerPlayer range', async () => {
+            const seed = 'cardConfigRange2';
+            // cardsPerPlayer = 15 should be ignored (max is 10)
+            const postRequest = createMockRequest({
+                drawnNumbers: [1],
+                currentNumber: 1,
+                numberOfPlayers: 2,
+                cardsPerPlayer: 15,
+            });
+
+            await POST(postRequest as never, createParams(seed));
+
+            const getRequest = createMockRequest();
+            const getResponse = await GET(getRequest as never, createParams(seed));
+            const getData = await getResponse.json();
+
+            expect(getData.numberOfPlayers).toBe(2);
+            expect(getData.cardsPerPlayer).toBeUndefined();
+        });
+    });
 });

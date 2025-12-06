@@ -62,8 +62,30 @@ export default function NumberDrawer({
     // Track if we are the host (who started the session)
     const [isHost, setIsHost] = useState(!joinedFromUrl);
 
+    // Generate cards from config (used by both host and when receiving sync)
+    const generateCardsFromConfig = useCallback((
+        seed: string,
+        numPlayers: number,
+        numCardsPerPlayer: number,
+        names: string[]
+    ) => {
+        const cards: Card[] = [];
+        let cardId = 1;
+        for (let playerIdx = 0; playerIdx < numPlayers; playerIdx++) {
+            for (let cardNum = 0; cardNum < numCardsPerPlayer; cardNum++) {
+                cards.push({
+                    id: cardId,
+                    grid: generateLottoCardWithSeed(seed, cardId),
+                    playerName: names[playerIdx]?.trim() || `${t.playerLabel} ${playerIdx + 1}`,
+                });
+                cardId++;
+            }
+        }
+        return cards;
+    }, [t.playerLabel]);
+
     // Cross-device sync using the API + BroadcastChannel
-    const { pushState, resetState } = useGameSync({
+    const { pushState, pushCardConfig, resetState } = useGameSync({
         seed: sessionData?.seed || null,
         isHost,
         enabled: !!sessionData?.seed,
@@ -72,6 +94,22 @@ export default function NumberDrawer({
             setDrawnNumbers(numbers);
             setCurrentNumber(current);
         }, [setDrawnNumbers, setCurrentNumber]),
+        onCardConfigUpdate: useCallback((config: { numberOfPlayers: number; cardsPerPlayer: number; playerNames: string[] }) => {
+            // Only update cards if we're a guest and don't already have cards
+            const seed = sessionData?.seed;
+            if (!isHost && seed && generatedCards.length === 0) {
+                const cards = generateCardsFromConfig(
+                    seed,
+                    config.numberOfPlayers,
+                    config.cardsPerPlayer,
+                    config.playerNames
+                );
+                setGeneratedCards(cards);
+                setNumberOfPlayers(config.numberOfPlayers);
+                setCardsPerPlayer(config.cardsPerPlayer);
+                setPlayerNames(config.playerNames);
+            }
+        }, [isHost, sessionData, generatedCards.length, generateCardsFromConfig, setGeneratedCards]),
         onReset: useCallback(() => {
             setDrawnNumbers([]);
             setCurrentNumber(null);
@@ -302,32 +340,29 @@ export default function NumberDrawer({
         setTimeout(() => {
             // Generate a new session seed (or reuse existing if already in a draw-only session)
             const seed = sessionData?.seed || generateSessionSeed();
+            const trimmedNames = playerNames.slice(0, numberOfPlayers);
             const newSession: SessionData = {
                 seed,
                 drawnNumbers,
                 numberOfPlayers,
                 cardsPerPlayer,
-                playerNames: playerNames.slice(0, numberOfPlayers),
+                playerNames: trimmedNames,
             };
             setSessionData(newSession);
             setIsHost(true); // Generating cards makes you the host
 
-            const cards: Card[] = [];
-            let cardId = 1;
-            for (let playerIdx = 0; playerIdx < numberOfPlayers; playerIdx++) {
-                for (let cardNum = 0; cardNum < cardsPerPlayer; cardNum++) {
-                    cards.push({
-                        id: cardId,
-                        grid: generateLottoCardWithSeed(seed, cardId),
-                        playerName: playerNames[playerIdx]?.trim() || `${t.playerLabel} ${playerIdx + 1}`,
-                    });
-                    cardId++;
-                }
-            }
+            const cards = generateCardsFromConfig(seed, numberOfPlayers, cardsPerPlayer, trimmedNames);
             setGeneratedCards(cards);
             setIsGenerating(false);
+
+            // Push card configuration to server for guests to receive
+            pushCardConfig(
+                { numberOfPlayers, cardsPerPlayer, playerNames: trimmedNames },
+                drawnNumbers,
+                currentNumber
+            );
         }, 100);
-    }, [numberOfPlayers, cardsPerPlayer, playerNames, t.playerLabel, setGeneratedCards, setSessionData, sessionData?.seed, drawnNumbers]);
+    }, [numberOfPlayers, cardsPerPlayer, playerNames, setGeneratedCards, setSessionData, sessionData?.seed, drawnNumbers, currentNumber, generateCardsFromConfig, pushCardConfig]);
 
     // Export to PDF function
     const exportToPDF = useCallback(() => {

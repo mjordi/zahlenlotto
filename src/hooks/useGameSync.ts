@@ -7,10 +7,19 @@
 import { useEffect, useRef, useCallback, useState } from 'react';
 import { SessionSync } from '@/utils/session';
 
+interface CardConfig {
+    numberOfPlayers: number;
+    cardsPerPlayer: number;
+    playerNames: string[];
+}
+
 interface GameState {
     drawnNumbers: number[];
     currentNumber: number | null;
     lastUpdate: number;
+    numberOfPlayers?: number;
+    cardsPerPlayer?: number;
+    playerNames?: string[];
 }
 
 interface UseGameSyncOptions {
@@ -19,11 +28,13 @@ interface UseGameSyncOptions {
     enabled: boolean;
     pollingInterval?: number; // ms, default 2000
     onStateUpdate: (drawnNumbers: number[], currentNumber: number | null) => void;
+    onCardConfigUpdate: (config: CardConfig) => void;
     onReset: () => void;
 }
 
 interface UseGameSyncReturn {
-    pushState: (drawnNumbers: number[], currentNumber: number | null) => Promise<void>;
+    pushState: (drawnNumbers: number[], currentNumber: number | null, cardConfig?: CardConfig) => Promise<void>;
+    pushCardConfig: (config: CardConfig, drawnNumbers: number[], currentNumber: number | null) => Promise<void>;
     resetState: () => Promise<void>;
     isConnected: boolean;
 }
@@ -41,9 +52,11 @@ export function useGameSync({
     enabled,
     pollingInterval = 2000,
     onStateUpdate,
+    onCardConfigUpdate,
     onReset,
 }: UseGameSyncOptions): UseGameSyncReturn {
     const lastUpdateRef = useRef<number>(0);
+    const lastCardConfigRef = useRef<string>(''); // Track card config changes
     const pollingRef = useRef<NodeJS.Timeout | null>(null);
     const sessionSyncRef = useRef<SessionSync | null>(null);
     const [isConnected, setIsConnected] = useState(false);
@@ -101,6 +114,19 @@ export function useGameSync({
                     } else {
                         onStateUpdate(state.drawnNumbers, state.currentNumber);
                     }
+
+                    // Check if card configuration was received
+                    if (state.numberOfPlayers && state.cardsPerPlayer) {
+                        const configKey = `${state.numberOfPlayers}-${state.cardsPerPlayer}-${(state.playerNames || []).join(',')}`;
+                        if (configKey !== lastCardConfigRef.current) {
+                            lastCardConfigRef.current = configKey;
+                            onCardConfigUpdate({
+                                numberOfPlayers: state.numberOfPlayers,
+                                cardsPerPlayer: state.cardsPerPlayer,
+                                playerNames: state.playerNames || [],
+                            });
+                        }
+                    }
                 }
             } catch (error) {
                 console.error('Polling error:', error);
@@ -120,10 +146,10 @@ export function useGameSync({
                 pollingRef.current = null;
             }
         };
-    }, [seed, isHost, enabled, pollingInterval, onStateUpdate, onReset]);
+    }, [seed, isHost, enabled, pollingInterval, onStateUpdate, onCardConfigUpdate, onReset]);
 
     // Push state to server (host only)
-    const pushState = useCallback(async (drawnNumbers: number[], currentNumber: number | null) => {
+    const pushState = useCallback(async (drawnNumbers: number[], currentNumber: number | null, cardConfig?: CardConfig) => {
         if (!seed || !isHost) return;
 
         // Broadcast to same-browser tabs
@@ -131,10 +157,17 @@ export function useGameSync({
 
         // Push to server for cross-device sync
         try {
+            const body: Record<string, unknown> = { drawnNumbers, currentNumber };
+            if (cardConfig) {
+                body.numberOfPlayers = cardConfig.numberOfPlayers;
+                body.cardsPerPlayer = cardConfig.cardsPerPlayer;
+                body.playerNames = cardConfig.playerNames;
+            }
+
             const response = await fetch(`/api/session/${seed}`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ drawnNumbers, currentNumber }),
+                body: JSON.stringify(body),
             });
 
             if (response.ok) {
@@ -144,6 +177,34 @@ export function useGameSync({
             }
         } catch (error) {
             console.error('Push state error:', error);
+            setIsConnected(false);
+        }
+    }, [seed, isHost]);
+
+    // Push card configuration to server (host only) - called when generating cards
+    const pushCardConfig = useCallback(async (config: CardConfig, drawnNumbers: number[], currentNumber: number | null) => {
+        if (!seed || !isHost) return;
+
+        try {
+            const response = await fetch(`/api/session/${seed}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    drawnNumbers,
+                    currentNumber,
+                    numberOfPlayers: config.numberOfPlayers,
+                    cardsPerPlayer: config.cardsPerPlayer,
+                    playerNames: config.playerNames,
+                }),
+            });
+
+            if (response.ok) {
+                const data = await response.json();
+                lastUpdateRef.current = data.lastUpdate;
+                setIsConnected(true);
+            }
+        } catch (error) {
+            console.error('Push card config error:', error);
             setIsConnected(false);
         }
     }, [seed, isHost]);
@@ -168,6 +229,7 @@ export function useGameSync({
 
     return {
         pushState,
+        pushCardConfig,
         resetState,
         isConnected,
     };
