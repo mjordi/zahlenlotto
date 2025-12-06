@@ -2,10 +2,17 @@
 
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { useLanguage } from '@/contexts/LanguageContext';
-import { TOTAL_NUMBERS, Card, getNewlyCompletedRows, generateLottoCard } from '@/utils/lotto';
+import { TOTAL_NUMBERS, Card, getNewlyCompletedRows } from '@/utils/lotto';
 import LottoCard from './LottoCard';
 import confetti from 'canvas-confetti';
 import { generatePdf } from '@/utils/pdfGenerator';
+import {
+    SessionData,
+    generateSessionSeed,
+    generateLottoCardWithSeed,
+    createShareableUrl,
+} from '@/utils/session';
+import { useGameSync } from '@/hooks/useGameSync';
 
 interface NumberDrawerProps {
     drawnNumbers: number[];
@@ -16,6 +23,9 @@ interface NumberDrawerProps {
     setSoundEnabled: (enabled: boolean | ((prev: boolean) => boolean)) => void;
     generatedCards: Card[];
     setGeneratedCards: (cards: Card[]) => void;
+    sessionData: SessionData | null;
+    setSessionData: (data: SessionData | null) => void;
+    joinedFromUrl: boolean;
 }
 
 export default function NumberDrawer({
@@ -26,7 +36,10 @@ export default function NumberDrawer({
     soundEnabled,
     setSoundEnabled,
     generatedCards,
-    setGeneratedCards
+    setGeneratedCards,
+    sessionData,
+    setSessionData,
+    joinedFromUrl,
 }: NumberDrawerProps) {
     const [isAnimating, setIsAnimating] = useState(false);
     const [justDrawn, setJustDrawn] = useState<number | null>(null);
@@ -44,6 +57,64 @@ export default function NumberDrawer({
     const [isExporting, setIsExporting] = useState(false);
     const [celebratingPlayers, setCelebratingPlayers] = useState<string[]>([]);
     const [newlyCompletedRowsByCard, setNewlyCompletedRowsByCard] = useState<Map<number, number[]>>(new Map());
+    const [linkCopied, setLinkCopied] = useState(false);
+
+    // Track if we are the host (who started the session)
+    const [isHost, setIsHost] = useState(!joinedFromUrl);
+
+    // Generate cards from config (used by both host and when receiving sync)
+    const generateCardsFromConfig = useCallback((
+        seed: string,
+        numPlayers: number,
+        numCardsPerPlayer: number,
+        names: string[]
+    ) => {
+        const cards: Card[] = [];
+        let cardId = 1;
+        for (let playerIdx = 0; playerIdx < numPlayers; playerIdx++) {
+            for (let cardNum = 0; cardNum < numCardsPerPlayer; cardNum++) {
+                cards.push({
+                    id: cardId,
+                    grid: generateLottoCardWithSeed(seed, cardId),
+                    playerName: names[playerIdx]?.trim() || `${t.playerLabel} ${playerIdx + 1}`,
+                });
+                cardId++;
+            }
+        }
+        return cards;
+    }, [t.playerLabel]);
+
+    // Cross-device sync using the API + BroadcastChannel
+    const { pushState, pushCardConfig, resetState } = useGameSync({
+        seed: sessionData?.seed || null,
+        isHost,
+        enabled: !!sessionData?.seed,
+        pollingInterval: 2000,
+        onStateUpdate: useCallback((numbers: number[], current: number | null) => {
+            setDrawnNumbers(numbers);
+            setCurrentNumber(current);
+        }, [setDrawnNumbers, setCurrentNumber]),
+        onCardConfigUpdate: useCallback((config: { numberOfPlayers: number; cardsPerPlayer: number; playerNames: string[] }) => {
+            // Only update cards if we're a guest and don't already have cards
+            const seed = sessionData?.seed;
+            if (!isHost && seed && generatedCards.length === 0) {
+                const cards = generateCardsFromConfig(
+                    seed,
+                    config.numberOfPlayers,
+                    config.cardsPerPlayer,
+                    config.playerNames
+                );
+                setGeneratedCards(cards);
+                setNumberOfPlayers(config.numberOfPlayers);
+                setCardsPerPlayer(config.cardsPerPlayer);
+                setPlayerNames(config.playerNames);
+            }
+        }, [isHost, sessionData, generatedCards.length, generateCardsFromConfig, setGeneratedCards]),
+        onReset: useCallback(() => {
+            setDrawnNumbers([]);
+            setCurrentNumber(null);
+        }, [setDrawnNumbers, setCurrentNumber]),
+    });
 
     // Audio Context initialisieren
     const initAudio = useCallback(() => {
@@ -169,6 +240,17 @@ export default function NumberDrawer({
 
         if (availableNumbers.length === 0) return;
 
+        // Create a session if this is the first draw and no session exists
+        if (!sessionData) {
+            const seed = generateSessionSeed();
+            const newSession: SessionData = {
+                seed,
+                drawnNumbers: [],
+            };
+            setSessionData(newSession);
+            setIsHost(true);
+        }
+
         initAudio();
         setIsAnimating(true);
         const randomNumber = availableNumbers[Math.floor(Math.random() * availableNumbers.length)];
@@ -180,6 +262,9 @@ export default function NumberDrawer({
             setJustDrawn(randomNumber);
             setIsAnimating(false);
 
+            // Push state to server for cross-device sync (also broadcasts to same-browser tabs)
+            pushState(newDrawnNumbers, randomNumber);
+
             // Sound abspielen
             playSound(523.25 + (randomNumber * 5), 0.2);
 
@@ -189,7 +274,7 @@ export default function NumberDrawer({
             // Just-drawn Animation entfernen
             setTimeout(() => setJustDrawn(null), 500);
         }, 300);
-    }, [drawnNumbers, isAnimating, initAudio, playSound, setCurrentNumber, setDrawnNumbers, checkRowCompletion]);
+    }, [drawnNumbers, isAnimating, initAudio, playSound, setCurrentNumber, setDrawnNumbers, checkRowCompletion, sessionData, setSessionData, pushState]);
 
     // Reset mit Bestätigung
     const reset = useCallback(() => {
@@ -205,7 +290,10 @@ export default function NumberDrawer({
         setShowCelebration(false);
         setNewlyCompletedRowsByCard(new Map());
         previousDrawnRef.current = [];
-    }, [drawnNumbers.length, t.confirmRestart, setDrawnNumbers, setCurrentNumber]);
+
+        // Reset state on server (also broadcasts to same-browser tabs)
+        resetState();
+    }, [drawnNumbers.length, t.confirmRestart, setDrawnNumbers, setCurrentNumber, resetState]);
 
     // Tastatursteuerung
     useEffect(() => {
@@ -246,25 +334,35 @@ export default function NumberDrawer({
     const isNumberDrawn = (num: number) => drawnNumbers.includes(num);
     const remainingNumbers = TOTAL_NUMBERS - drawnNumbers.length;
 
-    // Generate cards function
+    // Generate cards function with seeded randomness for shareable URLs
     const generateCards = useCallback(() => {
         setIsGenerating(true);
         setTimeout(() => {
-            const cards: Card[] = [];
-            let cardId = 1;
-            for (let playerIdx = 0; playerIdx < numberOfPlayers; playerIdx++) {
-                for (let cardNum = 0; cardNum < cardsPerPlayer; cardNum++) {
-                    cards.push({
-                        id: cardId++,
-                        grid: generateLottoCard(),
-                        playerName: playerNames[playerIdx]?.trim() || `${t.playerLabel} ${playerIdx + 1}`,
-                    });
-                }
-            }
+            // Generate a new session seed (or reuse existing if already in a draw-only session)
+            const seed = sessionData?.seed || generateSessionSeed();
+            const trimmedNames = playerNames.slice(0, numberOfPlayers);
+            const newSession: SessionData = {
+                seed,
+                drawnNumbers,
+                numberOfPlayers,
+                cardsPerPlayer,
+                playerNames: trimmedNames,
+            };
+            setSessionData(newSession);
+            setIsHost(true); // Generating cards makes you the host
+
+            const cards = generateCardsFromConfig(seed, numberOfPlayers, cardsPerPlayer, trimmedNames);
             setGeneratedCards(cards);
             setIsGenerating(false);
+
+            // Push card configuration to server for guests to receive
+            pushCardConfig(
+                { numberOfPlayers, cardsPerPlayer, playerNames: trimmedNames },
+                drawnNumbers,
+                currentNumber
+            );
         }, 100);
-    }, [numberOfPlayers, cardsPerPlayer, playerNames, t.playerLabel, setGeneratedCards]);
+    }, [numberOfPlayers, cardsPerPlayer, playerNames, setGeneratedCards, setSessionData, sessionData?.seed, drawnNumbers, currentNumber, generateCardsFromConfig, pushCardConfig]);
 
     // Export to PDF function
     const exportToPDF = useCallback(() => {
@@ -278,6 +376,34 @@ export default function NumberDrawer({
             setIsExporting(false);
         }, 10);
     }, [generatedCards, cardsPerPage, t]);
+
+    // Copy share link to clipboard
+    const copyShareLink = useCallback(async () => {
+        if (!sessionData) return;
+
+        // Include current drawn numbers in the shareable URL
+        const sessionWithCurrentState: SessionData = {
+            ...sessionData,
+            drawnNumbers,
+        };
+
+        const url = createShareableUrl(sessionWithCurrentState);
+        try {
+            await navigator.clipboard.writeText(url);
+            setLinkCopied(true);
+            setTimeout(() => setLinkCopied(false), 2000);
+        } catch {
+            // Fallback for older browsers
+            const textArea = document.createElement('textarea');
+            textArea.value = url;
+            document.body.appendChild(textArea);
+            textArea.select();
+            document.execCommand('copy');
+            document.body.removeChild(textArea);
+            setLinkCopied(true);
+            setTimeout(() => setLinkCopied(false), 2000);
+        }
+    }, [sessionData, drawnNumbers]);
 
     return (
         <div className="w-full max-w-6xl mx-auto space-y-6 relative">
@@ -324,6 +450,20 @@ export default function NumberDrawer({
                     >
                         {t.restart}
                     </button>
+                    {sessionData && (
+                        <button
+                            onClick={copyShareLink}
+                            className="px-8 py-4 bg-blue-700 hover:bg-blue-600 text-white font-semibold rounded-xl transition-all duration-300 shadow-lg shadow-blue-500/20 hover:shadow-blue-500/40 active:scale-95 flex items-center gap-2"
+                            title={t.shareGameDescription}
+                        >
+                            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                                <path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"></path>
+                                <polyline points="16 6 12 2 8 6"></polyline>
+                                <line x1="12" y1="2" x2="12" y2="15"></line>
+                            </svg>
+                            {linkCopied ? t.linkCopied : t.shareGame}
+                        </button>
+                    )}
                 </div>
 
                 {/* Tastatur-Hinweis & Sound */}
@@ -396,8 +536,18 @@ export default function NumberDrawer({
                                 {generatedCards.length} {generatedCards.length === 1 ? t.card : t.cards}
                             </div>
 
-                            {/* PDF Export Controls */}
-                            <div className="mb-4 flex gap-3 items-center justify-center">
+                            {/* Joined from URL notification */}
+                            {joinedFromUrl && (
+                                <div
+                                    className="mb-4 text-center text-sm py-2 px-4 rounded-lg"
+                                    style={{ backgroundColor: 'var(--btn-secondary-bg)', color: 'var(--text-secondary)' }}
+                                >
+                                    {t.joinedSession}
+                                </div>
+                            )}
+
+                            {/* PDF Export and Share Controls */}
+                            <div className="mb-4 flex flex-wrap gap-3 items-center justify-center">
                                 <div className="flex items-center gap-2">
                                     <label htmlFor="cardsPerPageSelect" className="text-xs font-medium" style={{ color: 'var(--text-muted)' }}>
                                         {t.cardsPerPage}:
@@ -422,6 +572,20 @@ export default function NumberDrawer({
                                 >
                                     {isExporting ? t.creatingPdf : t.downloadPdf}
                                 </button>
+                                {sessionData && (
+                                    <button
+                                        onClick={copyShareLink}
+                                        className="px-4 py-1 bg-blue-700 hover:bg-blue-600 text-white text-sm font-semibold rounded-lg transition-all duration-300 shadow-lg shadow-blue-500/20 hover:shadow-blue-500/40 active:scale-95 flex items-center gap-2"
+                                        title={t.shareGameDescription}
+                                    >
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                                            <path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"></path>
+                                            <polyline points="16 6 12 2 8 6"></polyline>
+                                            <line x1="12" y1="2" x2="12" y2="15"></line>
+                                        </svg>
+                                        {linkCopied ? t.linkCopied : t.shareGame}
+                                    </button>
+                                )}
                             </div>
 
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-h-[600px] overflow-y-auto">

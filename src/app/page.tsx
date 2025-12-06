@@ -1,10 +1,11 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { SUPPORTED_LANGUAGES } from '@/utils/translations';
 import { Card } from '@/utils/lotto';
 import ThemeToggle from '@/components/ThemeToggle';
+import { SessionData, getSessionFromUrl, generateLottoCardWithSeed } from '@/utils/session';
 
 import NumberDrawer from '@/components/NumberDrawer';
 
@@ -17,6 +18,45 @@ export default function Home() {
     const [currentNumber, setCurrentNumber] = useState<number | null>(null);
     const [soundEnabled, setSoundEnabled] = useState(true);
     const [generatedCards, setGeneratedCards] = useState<Card[]>([]);
+
+    // Session state for shareable URLs
+    const [sessionData, setSessionData] = useState<SessionData | null>(null);
+    const [joinedFromUrl, setJoinedFromUrl] = useState(false);
+
+    // Check for session in URL on mount
+    useEffect(() => {
+        const urlSession = getSessionFromUrl();
+        if (urlSession) {
+            setSessionData(urlSession);
+            setJoinedFromUrl(true);
+
+            // Restore drawn numbers from URL
+            if (urlSession.drawnNumbers.length > 0) {
+                setDrawnNumbers(urlSession.drawnNumbers);
+                setCurrentNumber(urlSession.drawnNumbers[urlSession.drawnNumbers.length - 1]);
+            }
+
+            // Generate cards from the session seed (only if card config is present)
+            if (urlSession.numberOfPlayers && urlSession.cardsPerPlayer) {
+                const cards: Card[] = [];
+                let cardId = 1;
+                for (let playerIdx = 0; playerIdx < urlSession.numberOfPlayers; playerIdx++) {
+                    for (let cardNum = 0; cardNum < urlSession.cardsPerPlayer; cardNum++) {
+                        cards.push({
+                            id: cardId,
+                            grid: generateLottoCardWithSeed(urlSession.seed, cardId),
+                            playerName: urlSession.playerNames?.[playerIdx]?.trim() || `${t.playerLabel} ${playerIdx + 1}`,
+                        });
+                        cardId++;
+                    }
+                }
+                setGeneratedCards(cards);
+            }
+
+            // Clear URL params after loading to keep URL clean during gameplay
+            window.history.replaceState({}, '', window.location.pathname);
+        }
+    }, [t.playerLabel]);
 
     const languages = SUPPORTED_LANGUAGES.map(lang => ({
         ...lang,
@@ -110,6 +150,9 @@ export default function Home() {
                         setSoundEnabled={setSoundEnabled}
                         generatedCards={generatedCards}
                         setGeneratedCards={setGeneratedCards}
+                        sessionData={sessionData}
+                        setSessionData={setSessionData}
+                        joinedFromUrl={joinedFromUrl}
                     />
                 </div>
             </div>

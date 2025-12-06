@@ -22,6 +22,15 @@ A modern web application for generating traditional 90-number Tombola/Bingo card
 - Export cards to PDF with customizable layout
 - Multiple cards per page (2-5 cards)
 
+### 🔗 Shareable Game Sessions
+- **Generate shareable URLs** to invite other players
+- Share **with or without cards** - draw-only sessions supported
+- All players get the **same cards and drawn numbers** from a shared link
+- **Cross-device real-time sync** via polling with Vercel KV
+- **Same-browser tab sync** via BroadcastChannel API
+- Session data encoded in URL (seed, drawn numbers, cards config)
+- One-click copy to clipboard
+
 ### 🌍 Multi-Language Support
 - German (Deutsch) 🇩🇪
 - English 🇬🇧
@@ -39,11 +48,17 @@ A modern web application for generating traditional 90-number Tombola/Bingo card
 
 ## How to Play
 
-1. **Generate Cards**: Switch to the "Generate Cards" tab and create your lottery cards
-2. **Draw Numbers**: Switch to the "Draw Numbers" tab to start the game
-3. **Live Tracking**: Your generated cards will appear below the number grid
-4. **Watch for Completion**: As numbers are drawn, they're automatically marked on all cards
-5. **Celebrate**: When a row is completed, enjoy the confetti celebration and "LOTTO!" announcement!
+1. **Generate Cards**: Set the number of players and cards per player, then generate your lottery cards
+2. **Share the Game**: Click the "Share Game" button to copy a link that gives all players the same cards
+3. **Draw Numbers**: Start drawing numbers - they're automatically marked on all cards
+4. **Watch for Completion**: When a row is completed, enjoy the confetti celebration and "LOTTO!" announcement!
+
+### Playing with Friends
+- Generate cards with player names
+- Click "Share Game" to copy the shareable URL
+- Send the link to all players
+- Everyone opens the link to get the same cards
+- One person draws numbers while everyone marks their physical/PDF cards
 
 ## Getting Started
 
@@ -109,6 +124,8 @@ npm run lint
 zahlenlotto/
 ├── src/
 │   ├── app/              # Next.js App Router
+│   │   ├── api/          # API routes
+│   │   │   └── session/  # Session sync API (GET/POST/DELETE)
 │   │   ├── page.tsx      # Main page with state management
 │   │   ├── layout.tsx    # Root layout
 │   │   └── globals.css   # Global styles
@@ -121,8 +138,11 @@ zahlenlotto/
 │   │   ├── LanguageContext.tsx
 │   │   ├── ThemeContext.tsx
 │   │   └── __tests__/    # Context tests
+│   ├── hooks/            # Custom React hooks
+│   │   └── useGameSync.ts # Cross-device sync hook
 │   └── utils/            # Utility functions
 │       ├── lotto.ts      # Card generation & row completion logic
+│       ├── session.ts    # Shareable URL session management
 │       ├── translations.ts
 │       ├── pdfGenerator.ts
 │       └── __tests__/    # Utility tests
@@ -137,6 +157,7 @@ zahlenlotto/
 - **Styling**: Tailwind CSS 4
 - **PDF Export**: jsPDF
 - **Animations**: canvas-confetti
+- **Real-time Sync**: Vercel KV (with in-memory fallback for development)
 - **Testing**: Jest + React Testing Library
 - **Deployment**: Vercel
 
