@@ -62,6 +62,13 @@ export default function NumberDrawer({
     // Track if we are the host (who started the session)
     const [isHost, setIsHost] = useState(!joinedFromUrl);
 
+    // Sync isHost with joinedFromUrl prop (handles async URL detection)
+    useEffect(() => {
+        if (joinedFromUrl) {
+            setIsHost(false);
+        }
+    }, [joinedFromUrl]);
+
     // Generate cards from config (used by both host and when receiving sync)
     const generateCardsFromConfig = useCallback((
         seed: string,
