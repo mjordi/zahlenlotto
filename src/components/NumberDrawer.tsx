@@ -229,8 +229,11 @@ export default function NumberDrawer({
         previousDrawnRef.current = newDrawnNumbers;
     }, [generatedCards, playCelebrationSound, triggerConfetti]);
 
-    // Zahl ziehen
+    // Zahl ziehen (only host can draw)
     const drawNumber = useCallback(() => {
+        // Guests cannot draw numbers
+        if (!isHost && sessionData) return;
+
         if (drawnNumbers.length >= TOTAL_NUMBERS || isAnimating) return;
 
         const availableNumbers = Array.from(
@@ -274,10 +277,13 @@ export default function NumberDrawer({
             // Just-drawn Animation entfernen
             setTimeout(() => setJustDrawn(null), 500);
         }, 300);
-    }, [drawnNumbers, isAnimating, initAudio, playSound, setCurrentNumber, setDrawnNumbers, checkRowCompletion, sessionData, setSessionData, pushState]);
+    }, [drawnNumbers, isAnimating, initAudio, playSound, setCurrentNumber, setDrawnNumbers, checkRowCompletion, sessionData, setSessionData, pushState, isHost]);
 
-    // Reset mit Bestätigung
+    // Reset mit Bestätigung (only host can reset)
     const reset = useCallback(() => {
+        // Guests cannot reset the game
+        if (!isHost) return;
+
         if (drawnNumbers.length > 0) {
             if (!confirm(t.confirmRestart)) {
                 return;
@@ -293,9 +299,9 @@ export default function NumberDrawer({
 
         // Reset state on server (also broadcasts to same-browser tabs)
         resetState();
-    }, [drawnNumbers.length, t.confirmRestart, setDrawnNumbers, setCurrentNumber, resetState]);
+    }, [drawnNumbers.length, t.confirmRestart, setDrawnNumbers, setCurrentNumber, resetState, isHost]);
 
-    // Tastatursteuerung
+    // Tastatursteuerung (draw/reset only work for host)
     useEffect(() => {
         const handleKeyDown = (e: KeyboardEvent) => {
             // Don't trigger shortcuts if user is typing in an input field
@@ -306,10 +312,10 @@ export default function NumberDrawer({
 
             if (e.code === 'Space' || e.code === 'Enter') {
                 e.preventDefault();
-                drawNumber();
+                if (isHost) drawNumber();
             } else if (e.code === 'KeyR') {
                 e.preventDefault();
-                reset();
+                if (isHost) reset();
             } else if (e.code === 'KeyM') {
                 e.preventDefault();
                 setSoundEnabled(prev => !prev);
@@ -318,7 +324,7 @@ export default function NumberDrawer({
 
         window.addEventListener('keydown', handleKeyDown);
         return () => window.removeEventListener('keydown', handleKeyDown);
-    }, [drawNumber, reset, setSoundEnabled]);
+    }, [drawNumber, reset, setSoundEnabled, isHost]);
 
     // Update player names when number of players changes
     useEffect(() => {
@@ -435,22 +441,36 @@ export default function NumberDrawer({
                     }
                 </div>
 
+                {/* Spectator Mode Indicator */}
+                {!isHost && sessionData && (
+                    <div className="mb-4 inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                            <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                            <circle cx="12" cy="12" r="3"></circle>
+                        </svg>
+                        <span className="text-sm font-medium">{t.spectatorMode}</span>
+                    </div>
+                )}
+
                 {/* Buttons */}
                 <div className="flex gap-4 justify-center flex-wrap mt-8">
                     <button
                         onClick={drawNumber}
-                        disabled={drawnNumbers.length >= TOTAL_NUMBERS || isAnimating}
+                        disabled={drawnNumbers.length >= TOTAL_NUMBERS || isAnimating || !isHost}
                         className="btn-primary px-8 py-4 text-lg disabled:opacity-50 disabled:cursor-not-allowed"
+                        title={!isHost ? t.hostOnly : undefined}
                     >
                         {t.drawNumber}
                     </button>
                     <button
                         onClick={reset}
-                        className="px-8 py-4 bg-red-600 hover:bg-red-500 text-white font-semibold rounded-xl transition-all duration-300 shadow-lg shadow-red-500/20 hover:shadow-red-500/40 active:scale-95 border border-white/10"
+                        disabled={!isHost}
+                        className="px-8 py-4 bg-red-600 hover:bg-red-500 text-white font-semibold rounded-xl transition-all duration-300 shadow-lg shadow-red-500/20 hover:shadow-red-500/40 active:scale-95 border border-white/10 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-red-600"
+                        title={!isHost ? t.hostOnly : undefined}
                     >
                         {t.restart}
                     </button>
-                    {sessionData && (
+                    {sessionData && isHost && (
                         <button
                             onClick={copyShareLink}
                             className="px-8 py-4 bg-blue-700 hover:bg-blue-600 text-white font-semibold rounded-xl transition-all duration-300 shadow-lg shadow-blue-500/20 hover:shadow-blue-500/40 active:scale-95 flex items-center gap-2"
@@ -466,10 +486,18 @@ export default function NumberDrawer({
                     )}
                 </div>
 
-                {/* Tastatur-Hinweis & Sound */}
+                {/* Tastatur-Hinweis & Sound (only show draw/reset for host) */}
                 <div className="flex items-center justify-center gap-4 text-xs mt-6 pt-4" style={{ borderTop: `1px solid var(--glass-border)` }}>
                     <div className="leading-loose" style={{ color: 'var(--text-muted)' }}>
-                        {t.keyboardHint} <kbd className="px-1.5 py-0.5 rounded border font-sans inline-block my-1" style={{ background: 'var(--btn-secondary-bg)', borderColor: 'var(--glass-border)', color: 'var(--text-secondary)' }}>{t.keySpace}</kbd> {t.keyDraw} | <kbd className="px-1.5 py-0.5 rounded border font-sans inline-block my-1" style={{ background: 'var(--btn-secondary-bg)', borderColor: 'var(--glass-border)', color: 'var(--text-secondary)' }}>{t.keyEnter}</kbd> {t.keyDraw} | <kbd className="px-1.5 py-0.5 rounded border font-sans inline-block my-1" style={{ background: 'var(--btn-secondary-bg)', borderColor: 'var(--glass-border)', color: 'var(--text-secondary)' }}>{t.keyR}</kbd> {t.keyReset} | <kbd className="px-1.5 py-0.5 rounded border font-sans inline-block my-1" style={{ background: 'var(--btn-secondary-bg)', borderColor: 'var(--glass-border)', color: 'var(--text-secondary)' }}>M</kbd> {t.muteToggle}
+                        {isHost ? (
+                            <>
+                                {t.keyboardHint} <kbd className="px-1.5 py-0.5 rounded border font-sans inline-block my-1" style={{ background: 'var(--btn-secondary-bg)', borderColor: 'var(--glass-border)', color: 'var(--text-secondary)' }}>{t.keySpace}</kbd> {t.keyDraw} | <kbd className="px-1.5 py-0.5 rounded border font-sans inline-block my-1" style={{ background: 'var(--btn-secondary-bg)', borderColor: 'var(--glass-border)', color: 'var(--text-secondary)' }}>{t.keyEnter}</kbd> {t.keyDraw} | <kbd className="px-1.5 py-0.5 rounded border font-sans inline-block my-1" style={{ background: 'var(--btn-secondary-bg)', borderColor: 'var(--glass-border)', color: 'var(--text-secondary)' }}>{t.keyR}</kbd> {t.keyReset} | <kbd className="px-1.5 py-0.5 rounded border font-sans inline-block my-1" style={{ background: 'var(--btn-secondary-bg)', borderColor: 'var(--glass-border)', color: 'var(--text-secondary)' }}>M</kbd> {t.muteToggle}
+                            </>
+                        ) : (
+                            <>
+                                {t.keyboardHint} <kbd className="px-1.5 py-0.5 rounded border font-sans inline-block my-1" style={{ background: 'var(--btn-secondary-bg)', borderColor: 'var(--glass-border)', color: 'var(--text-secondary)' }}>M</kbd> {t.muteToggle}
+                            </>
+                        )}
                     </div>
                 </div>
             </div>
@@ -572,7 +600,7 @@ export default function NumberDrawer({
                                 >
                                     {isExporting ? t.creatingPdf : t.downloadPdf}
                                 </button>
-                                {sessionData && (
+                                {sessionData && isHost && (
                                     <button
                                         onClick={copyShareLink}
                                         className="px-4 py-1 bg-blue-700 hover:bg-blue-600 text-white text-sm font-semibold rounded-lg transition-all duration-300 shadow-lg shadow-blue-500/20 hover:shadow-blue-500/40 active:scale-95 flex items-center gap-2"
@@ -602,7 +630,24 @@ export default function NumberDrawer({
                                 ))}
                             </div>
                         </>
+                    ) : !isHost && sessionData ? (
+                        // Guest waiting for cards
+                        <>
+                            <h2 className="text-center text-2xl font-bold mb-6 bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-amber-400">
+                                {t.playingCards}
+                            </h2>
+                            <div className="flex flex-col items-center justify-center py-12">
+                                <div className="animate-pulse text-center">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="mx-auto mb-4" style={{ color: 'var(--text-muted)' }} aria-hidden="true">
+                                        <circle cx="12" cy="12" r="10"></circle>
+                                        <polyline points="12 6 12 12 16 14"></polyline>
+                                    </svg>
+                                    <p style={{ color: 'var(--text-muted)' }}>{t.waitingForCards}</p>
+                                </div>
+                            </div>
+                        </>
                     ) : (
+                        // Host can generate cards
                         <>
                             <h2 className="text-center text-2xl font-bold mb-6 bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-amber-400">
                                 {t.tabGenerateCards}

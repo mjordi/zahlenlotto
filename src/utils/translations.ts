@@ -89,6 +89,9 @@ export interface Translations {
     copyLink: string;
     linkCopied: string;
     joinedSession: string;
+    spectatorMode: string;
+    hostOnly: string;
+    waitingForCards: string;
 }
 
 export const translations: Record<Language, Translations> = {
@@ -174,6 +177,9 @@ export const translations: Record<Language, Translations> = {
         copyLink: 'Link kopieren',
         linkCopied: 'Link kopiert!',
         joinedSession: 'Geteiltem Spiel beigetreten',
+        spectatorMode: 'Zuschauermodus',
+        hostOnly: 'Nur der Gastgeber kann Zahlen ziehen',
+        waitingForCards: 'Warten auf Karten vom Gastgeber...',
     },
 
     en: {
@@ -258,6 +264,9 @@ export const translations: Record<Language, Translations> = {
         copyLink: 'Copy Link',
         linkCopied: 'Link copied!',
         joinedSession: 'Joined shared game',
+        spectatorMode: 'Spectator Mode',
+        hostOnly: 'Only the host can draw numbers',
+        waitingForCards: 'Waiting for cards from host...',
     },
 
     fr: {
@@ -342,6 +351,9 @@ export const translations: Record<Language, Translations> = {
         copyLink: 'Copier le Lien',
         linkCopied: 'Lien copié!',
         joinedSession: 'Partie partagée rejointe',
+        spectatorMode: 'Mode Spectateur',
+        hostOnly: "Seul l'hôte peut tirer les numéros",
+        waitingForCards: "En attente des cartes de l'hôte...",
     },
 
     it: {
@@ -426,6 +438,9 @@ export const translations: Record<Language, Translations> = {
         copyLink: 'Copia Link',
         linkCopied: 'Link copiato!',
         joinedSession: 'Partita condivisa unita',
+        spectatorMode: 'Modalità Spettatore',
+        hostOnly: "Solo l'host può estrarre numeri",
+        waitingForCards: "In attesa delle cartelle dall'host...",
     },
 };
 
