@@ -44,6 +44,8 @@ export default function NumberDrawer({
     const [isExporting, setIsExporting] = useState(false);
     const [celebratingPlayers, setCelebratingPlayers] = useState<string[]>([]);
     const [newlyCompletedRowsByCard, setNewlyCompletedRowsByCard] = useState<Map<number, number[]>>(new Map());
+    const [showAllDrawn, setShowAllDrawn] = useState(false);
+    const [showPdfDrawer, setShowPdfDrawer] = useState(false);
 
     // Audio Context initialisieren
     const initAudio = useCallback(() => {
@@ -293,7 +295,7 @@ export default function NumberDrawer({
           ${isAnimating ? 'number-ball-spin' : ''}
           ${currentNumber !== null
                         ? `bg-gradient-to-br from-amber-400 via-amber-500 to-amber-700 text-white text-7xl border-amber-300/50 number-ball ${justDrawn !== null ? 'number-ball-reveal' : ''}`
-                        : 'bg-gradient-to-br from-slate-700/50 to-slate-800/50 text-slate-500 text-3xl border-slate-600/30 number-ball-empty'
+                        : 'bg-gradient-to-br from-slate-700/50 to-slate-800/50 text-slate-500 text-3xl border-slate-600/30 number-ball-empty empty-ball-pulse'
                     }
         `}>
                     {currentNumber !== null && (
@@ -307,7 +309,12 @@ export default function NumberDrawer({
                 {/* Ziehungszähler */}
                 <div className="mt-4 font-medium" style={{ color: 'var(--text-muted)' }}>
                     {drawnNumbers.length === 0
-                        ? t.noNumberDrawn
+                        ? (
+                            <span className="flex flex-col items-center gap-1">
+                                <span>{t.noNumberDrawn}</span>
+                                <span className="text-xs opacity-70">{t.emptyStateHint}</span>
+                            </span>
+                        )
                         : drawnNumbers.length === TOTAL_NUMBERS
                             ? t.allDrawn
                             : `${drawnNumbers.length}${t.nthDrawing}`
@@ -414,37 +421,54 @@ export default function NumberDrawer({
                             <h2 className="text-center font-display text-2xl font-bold mb-6 bg-clip-text text-transparent bg-gradient-to-r from-amber-400 to-orange-400">
                                 {t.playingCards}
                             </h2>
-                            <div className="text-center text-sm mb-4" style={{ color: 'var(--text-muted)' }}>
-                                {generatedCards.length} {generatedCards.length === 1 ? t.card : t.cards}
-                            </div>
-
-                            {/* PDF Export Controls */}
-                            <div className="mb-4 flex gap-3 items-center justify-center">
-                                <div className="flex items-center gap-2">
-                                    <label htmlFor="cardsPerPageSelect" className="text-xs font-medium" style={{ color: 'var(--text-muted)' }}>
-                                        {t.cardsPerPage}:
-                                    </label>
-                                    <select
-                                        id="cardsPerPageSelect"
-                                        value={cardsPerPage}
-                                        onChange={(e) => setCardsPerPage(parseInt(e.target.value))}
-                                        className="input-field text-sm py-1 px-2"
-                                        aria-label={t.cardsPerPage}
-                                    >
-                                        <option value="2">2</option>
-                                        <option value="3">3</option>
-                                        <option value="4">4</option>
-                                        <option value="5">5</option>
-                                    </select>
-                                </div>
+                            <div className="flex items-center justify-center gap-3 text-sm mb-4">
+                                <span style={{ color: 'var(--text-muted)' }}>
+                                    {generatedCards.length} {generatedCards.length === 1 ? t.card : t.cards}
+                                </span>
                                 <button
-                                    onClick={exportToPDF}
-                                    disabled={isExporting}
-                                    className="btn-success text-sm"
+                                    onClick={() => setShowPdfDrawer(!showPdfDrawer)}
+                                    className="btn-success text-xs flex items-center gap-1.5"
                                 >
-                                    {isExporting ? t.creatingPdf : t.downloadPdf}
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                                        <polyline points="7 10 12 15 17 10"></polyline>
+                                        <line x1="12" y1="15" x2="12" y2="3"></line>
+                                    </svg>
+                                    {t.exportPdf}
                                 </button>
                             </div>
+
+                            {/* PDF Export Drawer */}
+                            {showPdfDrawer && (
+                                <div className="mb-4 p-3 rounded-xl animate-slide-up" style={{ background: 'var(--input-bg)', border: '1px solid var(--glass-border)' }}>
+                                    <div className="flex gap-3 items-center justify-between">
+                                        <div className="flex items-center gap-2">
+                                            <label htmlFor="cardsPerPageSelect" className="text-xs font-medium whitespace-nowrap" style={{ color: 'var(--text-muted)' }}>
+                                                {t.cardsPerPage}:
+                                            </label>
+                                            <select
+                                                id="cardsPerPageSelect"
+                                                value={cardsPerPage}
+                                                onChange={(e) => setCardsPerPage(parseInt(e.target.value))}
+                                                className="input-field text-sm py-1 px-2"
+                                                aria-label={t.cardsPerPage}
+                                            >
+                                                <option value="2">2</option>
+                                                <option value="3">3</option>
+                                                <option value="4">4</option>
+                                                <option value="5">5</option>
+                                            </select>
+                                        </div>
+                                        <button
+                                            onClick={exportToPDF}
+                                            disabled={isExporting}
+                                            className="btn-primary text-sm py-2 px-4"
+                                        >
+                                            {isExporting ? t.creatingPdf : t.downloadPdf}
+                                        </button>
+                                    </div>
+                                </div>
+                            )}
 
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-h-[600px] overflow-y-auto">
                                 {generatedCards.map((card) => (
@@ -542,21 +566,45 @@ export default function NumberDrawer({
                 <h2 className="text-center font-display text-2xl font-bold mb-6 bg-clip-text text-transparent bg-gradient-to-r from-purple-400 to-pink-400">
                     {t.drawnNumbersList}
                 </h2>
-                <div className="flex flex-wrap gap-3 justify-center min-h-[50px] items-center">
+                <div className="flex flex-wrap gap-2.5 justify-center min-h-[50px] items-center">
                     {drawnNumbers.length === 0 ? (
                         <span className="italic" style={{ color: 'var(--text-muted)' }}>{t.noNumbersDrawn}</span>
                     ) : (
-                        drawnNumbers.map((num, idx) => (
-                            <div
-                                key={idx}
-                                className="w-10 h-10 bg-gradient-to-br from-amber-500 to-amber-700 rounded-full flex items-center justify-center font-display font-bold text-white text-sm shadow-lg border border-amber-400/30 animate-draw"
-                                style={{ animationDelay: `${idx * 0.05}s` }}
-                            >
-                                {num}
-                            </div>
-                        ))
+                        <>
+                            {(showAllDrawn ? drawnNumbers : drawnNumbers.slice(-20)).map((num, idx) => {
+                                const actualIdx = showAllDrawn ? idx : drawnNumbers.length - 20 + idx;
+                                const displayIdx = actualIdx < 0 ? idx : actualIdx;
+                                return (
+                                    <div
+                                        key={`${displayIdx}-${num}`}
+                                        className="relative flex flex-col items-center"
+                                    >
+                                        <div className="text-[9px] font-medium mb-0.5" style={{ color: 'var(--text-muted)' }}>
+                                            #{displayIdx + 1}
+                                        </div>
+                                        <div
+                                            className="w-10 h-10 bg-gradient-to-br from-amber-500 to-amber-700 rounded-full flex items-center justify-center font-display font-bold text-white text-sm shadow-lg border border-amber-400/30 animate-draw"
+                                            style={{ animationDelay: `${(showAllDrawn ? idx : idx) * 0.03}s` }}
+                                        >
+                                            {num}
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                        </>
                     )}
                 </div>
+                {drawnNumbers.length > 20 && (
+                    <div className="text-center mt-4">
+                        <button
+                            onClick={() => setShowAllDrawn(!showAllDrawn)}
+                            className="text-sm font-medium transition-colors hover:underline"
+                            style={{ color: 'var(--primary)' }}
+                        >
+                            {showAllDrawn ? t.showLess : `${t.showAll} (${drawnNumbers.length})`}
+                        </button>
+                    </div>
+                )}
             </div>
 
             {/* Celebration Overlay */}

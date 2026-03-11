@@ -23,30 +23,34 @@
   --lotto-cell-empty: rgba(30, 41, 59, 0.5);
   --lotto-card-bg: rgba(15, 23, 42, 0.5);
   --lotto-card-border: rgba(255, 255, 255, 0.2);
+  --lotto-drawn-from: #059669;
+  --lotto-drawn-to: #065f46;
 }
 
 /* Light mode */
 [data-theme="light"] {
-  --background: #ffffff;
+  --background: #f8fafc;
   --foreground: #0f172a;
   --primary: #2563eb;
   --primary-glow: rgba(37, 99, 235, 0.3);
   --accent: #d97706;
-  --card-bg: rgba(248, 250, 252, 0.9);
-  --card-border: rgba(15, 23, 42, 0.15);
-  --glass-bg: rgba(248, 250, 252, 0.8);
-  --glass-border: rgba(15, 23, 42, 0.2);
-  --input-bg: rgba(255, 255, 255, 0.9);
+  --card-bg: rgba(255, 255, 255, 0.95);
+  --card-border: rgba(15, 23, 42, 0.12);
+  --glass-bg: rgba(255, 255, 255, 0.85);
+  --glass-border: rgba(15, 23, 42, 0.12);
+  --input-bg: #ffffff;
   --input-border: rgba(15, 23, 42, 0.2);
   --text-muted: #64748b;
-  --text-secondary: #475569;
+  --text-secondary: #334155;
   --btn-secondary-bg: #e2e8f0;
   --btn-secondary-hover: #cbd5e1;
   --lotto-cell-bg: #ffffff;
   --lotto-cell-text: #0f172a;
-  --lotto-cell-empty: rgba(226, 232, 240, 0.7);
-  --lotto-card-bg: rgba(255, 255, 255, 0.9);
-  --lotto-card-border: rgba(15, 23, 42, 0.15);
+  --lotto-cell-empty: #e2e8f0;
+  --lotto-card-bg: #ffffff;
+  --lotto-card-border: rgba(15, 23, 42, 0.18);
+  --lotto-drawn-from: #059669;
+  --lotto-drawn-to: #047857;
 }
 
 * {
@@ -98,6 +102,12 @@ body {
     background: var(--glass-bg);
     border: 1px solid var(--glass-border);
     @apply backdrop-blur-xl rounded-2xl shadow-xl;
+  }
+
+  [data-theme="light"] .glass-panel {
+    box-shadow:
+      0 1px 3px rgba(0, 0, 0, 0.06),
+      0 4px 16px rgba(0, 0, 0, 0.04);
   }
 
   .btn-primary {
@@ -264,6 +274,37 @@ body {
   animation: celebration-in 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
 }
 
+/* Empty state pulse */
+@keyframes empty-ball-pulse {
+  0%, 100% {
+    transform: scale(1);
+    opacity: 0.5;
+  }
+  50% {
+    transform: scale(1.06);
+    opacity: 0.7;
+  }
+}
+
+.empty-ball-pulse {
+  animation: empty-ball-pulse 2.5s ease-in-out infinite;
+}
+
+/* PDF drawer slide */
+@keyframes slide-up {
+  from {
+    transform: translateY(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+.animate-slide-up {
+  animation: slide-up 0.3s ease-out forwards;
+}
 
 /* Performance optimizations */
 .glass-panel,
