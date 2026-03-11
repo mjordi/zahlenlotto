@@ -82,6 +82,16 @@ export interface Translations {
     themeAuto: string;
     themeLight: string;
     themeDark: string;
+
+    // Empty state
+    emptyStateHint: string;
+
+    // Drawn history
+    showAll: string;
+    showLess: string;
+
+    // PDF export
+    exportPdf: string;
 }
 
 export const translations: Record<Language, Translations> = {
@@ -160,6 +170,16 @@ export const translations: Record<Language, Translations> = {
         themeAuto: 'Automatisch',
         themeLight: 'Hell',
         themeDark: 'Dunkel',
+
+        // Empty state
+        emptyStateHint: 'Space drücken oder klicken zum Ziehen',
+
+        // Drawn history
+        showAll: 'Alle anzeigen',
+        showLess: 'Weniger anzeigen',
+
+        // PDF export
+        exportPdf: 'PDF Export',
     },
 
     en: {
@@ -237,6 +257,16 @@ export const translations: Record<Language, Translations> = {
         themeAuto: 'Automatic',
         themeLight: 'Light',
         themeDark: 'Dark',
+
+        // Empty state
+        emptyStateHint: 'Press Space or click to draw',
+
+        // Drawn history
+        showAll: 'Show all',
+        showLess: 'Show less',
+
+        // PDF export
+        exportPdf: 'PDF Export',
     },
 
     fr: {
@@ -314,6 +344,16 @@ export const translations: Record<Language, Translations> = {
         themeAuto: 'Automatique',
         themeLight: 'Clair',
         themeDark: 'Sombre',
+
+        // Empty state
+        emptyStateHint: 'Appuyez sur Espace ou cliquez pour tirer',
+
+        // Drawn history
+        showAll: 'Tout afficher',
+        showLess: 'Moins afficher',
+
+        // PDF export
+        exportPdf: 'Export PDF',
     },
 
     it: {
@@ -391,6 +431,16 @@ export const translations: Record<Language, Translations> = {
         themeAuto: 'Automatico',
         themeLight: 'Chiaro',
         themeDark: 'Scuro',
+
+        // Empty state
+        emptyStateHint: 'Premi Spazio o clicca per estrarre',
+
+        // Drawn history
+        showAll: 'Mostra tutto',
+        showLess: 'Mostra meno',
+
+        // PDF export
+        exportPdf: 'Esporta PDF',
     },
 };
 
