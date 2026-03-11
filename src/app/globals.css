@@ -264,14 +264,6 @@ body {
   animation: celebration-in 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
 }
 
-/* Numbers grid column separator */
-.grid-col-separator {
-  border-right: 1px solid var(--glass-border);
-}
-
-[data-theme="light"] .grid-col-separator {
-  border-right: 1px solid rgba(15, 23, 42, 0.1);
-}
 
 /* Performance optimizations */
 .glass-panel,

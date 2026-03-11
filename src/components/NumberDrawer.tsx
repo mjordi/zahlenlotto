@@ -348,43 +348,46 @@ export default function NumberDrawer({
                         {t.allNumbersOverview}
                     </h2>
 
-                    {/* Column Headers */}
-                    <div className="grid grid-cols-10 gap-x-0 gap-y-0 mb-1 px-0.5">
-                        {['1-9', '10-19', '20-29', '30-39', '40-49', '50-59', '60-69', '70-79', '80-89', '90'].map((label, i) => (
-                            <div key={i} className="text-center text-[9px] md:text-[10px] font-medium truncate px-0.5" style={{ color: 'var(--text-muted)' }}>
-                                {label}
-                            </div>
-                        ))}
-                    </div>
-
-                    {/* Zahlen Grid - organized by column groups */}
-                    <div className="grid grid-cols-10 gap-1.5 md:gap-2 mb-8">
-                        {Array.from({ length: TOTAL_NUMBERS }, (_, i) => i + 1).map(num => {
-                            const drawn = isNumberDrawn(num);
-                            const isJustDrawn = num === justDrawn;
-                            const col = (num - 1) % 10;
-                            const isLastInGroup = col === 9;
-
+                    {/* Zahlen Grid with row labels on the side */}
+                    <div className="mb-8">
+                        {Array.from({ length: 9 }, (_, rowIdx) => {
+                            const rowStart = rowIdx * 10 + 1;
+                            const rowEnd = Math.min(rowStart + 9, TOTAL_NUMBERS);
+                            const label = rowIdx < 8 ? `${rowStart}-${rowEnd}` : `${rowStart}-${TOTAL_NUMBERS}`;
                             return (
-                                <div
-                                    key={num}
-                                    className={`
-                      aspect-square flex items-center justify-center rounded-lg font-display font-semibold text-xs md:text-base
-                      transition-all duration-500 border
-                      ${drawn
-                                            ? 'bg-gradient-to-br from-emerald-600 to-emerald-800 text-white border-emerald-400/50 shadow-lg shadow-emerald-500/20 scale-105'
-                                            : 'border'
-                                        }
-                      ${isJustDrawn ? 'animate-bounce scale-125 z-10' : ''}
-                      ${!isLastInGroup && !drawn ? 'grid-col-separator' : ''}
-                    `}
-                                    style={!drawn ? {
-                                        background: 'var(--lotto-cell-empty)',
-                                        color: 'var(--text-muted)',
-                                        borderColor: 'var(--glass-border)'
-                                    } : {}}
-                                >
-                                    {num}
+                                <div key={rowIdx} className="flex items-center gap-1.5 md:gap-2 mb-1.5 md:mb-2 last:mb-0">
+                                    <div className="w-10 md:w-14 shrink-0 text-right text-[9px] md:text-[11px] font-medium pr-1" style={{ color: 'var(--text-muted)' }}>
+                                        {label}
+                                    </div>
+                                    <div className="grid grid-cols-10 gap-1.5 md:gap-2 flex-1">
+                                        {Array.from({ length: 10 }, (_, colIdx) => {
+                                            const num = rowStart + colIdx;
+                                            if (num > TOTAL_NUMBERS) return <div key={colIdx} />;
+                                            const drawn = isNumberDrawn(num);
+                                            const isJustDrawn = num === justDrawn;
+                                            return (
+                                                <div
+                                                    key={num}
+                                                    className={`
+                                                        aspect-square flex items-center justify-center rounded-lg font-display font-semibold text-xs md:text-base
+                                                        transition-all duration-500 border
+                                                        ${drawn
+                                                            ? 'bg-gradient-to-br from-emerald-600 to-emerald-800 text-white border-emerald-400/50 shadow-lg shadow-emerald-500/20 scale-105'
+                                                            : 'border'
+                                                        }
+                                                        ${isJustDrawn ? 'animate-bounce scale-125 z-10' : ''}
+                                                    `}
+                                                    style={!drawn ? {
+                                                        background: 'var(--lotto-cell-empty)',
+                                                        color: 'var(--text-muted)',
+                                                        borderColor: 'var(--glass-border)'
+                                                    } : {}}
+                                                >
+                                                    {num}
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
                                 </div>
                             );
                         })}
@@ -521,7 +524,7 @@ export default function NumberDrawer({
                                     <button
                                         onClick={generateCards}
                                         disabled={isGenerating}
-                                        className="btn-warning w-full"
+                                        className="btn-primary w-full disabled:opacity-50 disabled:cursor-not-allowed"
                                         aria-label={isGenerating ? t.generating : t.generateCards}
                                     >
                                         {isGenerating ? t.generating : t.generateCards}
@@ -546,7 +549,7 @@ export default function NumberDrawer({
                         drawnNumbers.map((num, idx) => (
                             <div
                                 key={idx}
-                                className="w-10 h-10 bg-gradient-to-br from-amber-400 to-amber-600 rounded-full flex items-center justify-center font-display font-bold text-white text-sm shadow-lg border border-amber-300/30 animate-draw"
+                                className="w-10 h-10 bg-gradient-to-br from-amber-500 to-amber-700 rounded-full flex items-center justify-center font-display font-bold text-white text-sm shadow-lg border border-amber-400/30 animate-draw"
                                 style={{ animationDelay: `${idx * 0.05}s` }}
                             >
                                 {num}
