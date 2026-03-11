@@ -284,19 +284,24 @@ export default function NumberDrawer({
             {/* Aktuelle Ziehung */}
             <div className="glass-panel p-6 md:p-8 text-center relative overflow-hidden">
                 <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-blue-500/50 to-transparent"></div>
-                <h2 className="text-2xl font-bold mb-6 bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-amber-400">{t.currentDrawing}</h2>
+                <h2 className="font-display text-2xl font-bold mb-6 bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-amber-400">{t.currentDrawing}</h2>
 
                 {/* Große aktuelle Zahl */}
                 <div className={`
-          w-[140px] h-[140px] mx-auto rounded-full flex items-center justify-center
-          font-bold shadow-2xl transition-all duration-500 border-4
-          ${isAnimating ? 'animate-pulse scale-110' : ''}
+          w-[160px] h-[160px] mx-auto rounded-full flex items-center justify-center
+          font-display font-bold transition-all duration-500 border-4 relative
+          ${isAnimating ? 'number-ball-spin' : ''}
           ${currentNumber !== null
-                        ? 'bg-gradient-to-br from-amber-400 to-amber-600 text-white text-6xl border-amber-300/50 shadow-amber-500/40'
-                        : 'bg-slate-800/50 text-slate-600 text-2xl border-slate-700/50'
+                        ? `bg-gradient-to-br from-amber-400 via-amber-500 to-amber-700 text-white text-7xl border-amber-300/50 number-ball ${justDrawn !== null ? 'number-ball-reveal' : ''}`
+                        : 'bg-gradient-to-br from-slate-700/50 to-slate-800/50 text-slate-500 text-3xl border-slate-600/30 number-ball-empty'
                     }
         `}>
-                    {currentNumber !== null ? currentNumber : '?'}
+                    {currentNumber !== null && (
+                        <div className="absolute inset-0 rounded-full overflow-hidden pointer-events-none">
+                            <div className="absolute inset-x-0 top-0 h-[45%] bg-gradient-to-b from-white/25 to-transparent" />
+                        </div>
+                    )}
+                    <span className="relative z-10 drop-shadow-lg">{currentNumber !== null ? currentNumber : '?'}</span>
                 </div>
 
                 {/* Ziehungszähler */}
@@ -338,7 +343,7 @@ export default function NumberDrawer({
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 {/* Zahlenübersicht */}
                 <div className="glass-panel p-6 md:p-8">
-                    <h2 className="text-center text-2xl font-bold mb-6 bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-amber-400">
+                    <h2 className="text-center font-display text-2xl font-bold mb-6 bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-amber-400">
                         {t.allNumbersOverview}
                     </h2>
 
@@ -352,7 +357,7 @@ export default function NumberDrawer({
                                 <div
                                     key={num}
                                     className={`
-                      aspect-square flex items-center justify-center rounded-lg font-semibold text-sm md:text-base
+                      aspect-square flex items-center justify-center rounded-lg font-display font-semibold text-sm md:text-base
                       transition-all duration-500 border
                       ${drawn
                                             ? 'bg-gradient-to-br from-emerald-600 to-emerald-800 text-white border-emerald-400/50 shadow-lg shadow-emerald-500/20 scale-105'
@@ -375,11 +380,11 @@ export default function NumberDrawer({
                     {/* Statistik */}
                     <div className="flex justify-center gap-12 flex-wrap pt-6" style={{ borderTop: `1px solid var(--glass-border)` }}>
                         <div className="text-center">
-                            <div className="text-3xl font-bold text-blue-500">{drawnNumbers.length}</div>
+                            <div className="font-display text-3xl font-bold text-blue-500">{drawnNumbers.length}</div>
                             <div className="text-sm uppercase tracking-wider font-medium" style={{ color: 'var(--text-muted)' }}>{t.drawn}</div>
                         </div>
                         <div className="text-center">
-                            <div className="text-3xl font-bold" style={{ color: 'var(--text-secondary)' }}>{remainingNumbers}</div>
+                            <div className="font-display text-3xl font-bold" style={{ color: 'var(--text-secondary)' }}>{remainingNumbers}</div>
                             <div className="text-sm uppercase tracking-wider font-medium" style={{ color: 'var(--text-muted)' }}>{t.remaining}</div>
                         </div>
                     </div>
@@ -389,7 +394,7 @@ export default function NumberDrawer({
                 <div className="glass-panel p-6 md:p-8">
                     {generatedCards.length > 0 ? (
                         <>
-                            <h2 className="text-center text-2xl font-bold mb-6 bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-amber-400">
+                            <h2 className="text-center font-display text-2xl font-bold mb-6 bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-amber-400">
                                 {t.playingCards}
                             </h2>
                             <div className="text-center text-sm mb-4" style={{ color: 'var(--text-muted)' }}>
@@ -440,7 +445,7 @@ export default function NumberDrawer({
                         </>
                     ) : (
                         <>
-                            <h2 className="text-center text-2xl font-bold mb-6 bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-amber-400">
+                            <h2 className="text-center font-display text-2xl font-bold mb-6 bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-amber-400">
                                 {t.tabGenerateCards}
                             </h2>
                             <div className="flex flex-col items-center justify-center">
@@ -516,7 +521,7 @@ export default function NumberDrawer({
 
             {/* Gezogene Zahlen Liste */}
             <div className="glass-panel p-6 md:p-8">
-                <h2 className="text-center text-2xl font-bold mb-6 bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-amber-400">
+                <h2 className="text-center font-display text-2xl font-bold mb-6 bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-amber-400">
                     {t.drawnNumbersList}
                 </h2>
                 <div className="flex flex-wrap gap-3 justify-center min-h-[50px] items-center">
@@ -526,7 +531,7 @@ export default function NumberDrawer({
                         drawnNumbers.map((num, idx) => (
                             <div
                                 key={idx}
-                                className="w-10 h-10 bg-gradient-to-br from-amber-400 to-amber-600 rounded-full flex items-center justify-center font-bold text-white text-sm shadow-lg border border-amber-300/30 animate-draw"
+                                className="w-10 h-10 bg-gradient-to-br from-amber-400 to-amber-600 rounded-full flex items-center justify-center font-display font-bold text-white text-sm shadow-lg border border-amber-300/30 animate-draw"
                                 style={{ animationDelay: `${idx * 0.05}s` }}
                             >
                                 {num}
@@ -544,7 +549,7 @@ export default function NumberDrawer({
                     aria-live="assertive"
                 >
                     <div className="bg-gradient-to-br from-amber-400 via-amber-500 to-amber-600 text-white px-16 py-12 rounded-3xl shadow-2xl border-4 border-white/30 animate-bounce">
-                        <div className="text-7xl font-black tracking-wider drop-shadow-2xl">
+                        <div className="font-display text-7xl font-bold tracking-wider drop-shadow-2xl">
                             {t.lottoWin}
                         </div>
                         <div className="text-2xl font-semibold mt-4 text-center text-white/90">

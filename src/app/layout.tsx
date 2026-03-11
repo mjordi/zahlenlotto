@@ -1,7 +1,20 @@
 import type { Metadata, Viewport } from "next";
+import { DM_Sans, Fredoka } from "next/font/google";
 import "./globals.css";
 import { LanguageProvider } from '@/contexts/LanguageContext';
 import { ThemeProvider } from '@/contexts/ThemeContext';
+
+const dmSans = DM_Sans({
+    subsets: ["latin"],
+    variable: "--font-dm-sans",
+    display: "swap",
+});
+
+const fredoka = Fredoka({
+    subsets: ["latin"],
+    variable: "--font-fredoka",
+    display: "swap",
+});
 
 export const metadata: Metadata = {
     metadataBase: new URL('https://zahlenlotto.vercel.app'),
@@ -56,7 +69,7 @@ export default async function RootLayout({
     const lang = (['de', 'en', 'fr', 'it'].includes(langCookie?.value || '') ? langCookie?.value : 'de') as Language;
 
     return (
-        <html lang={lang} data-theme={theme} data-language={lang} suppressHydrationWarning>
+        <html lang={lang} data-theme={theme} data-language={lang} className={`${dmSans.variable} ${fredoka.variable}`} suppressHydrationWarning>
             <body className="antialiased">
                 <ThemeProvider initialTheme={theme} initialThemePreference={themePreference}>
                     <LanguageProvider initialLanguage={lang}>
