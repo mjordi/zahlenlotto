@@ -45,10 +45,11 @@ export default function LottoCard({ cardNumber, grid, compact, drawnNumbers = []
                     return (
                         <div
                             key={rowIndex}
-                            className={`grid grid-cols-9 ${isRowCompleted ? 'bg-gradient-to-r from-amber-500/40 via-amber-400/50 to-amber-500/40' : ''} ${isNewlyCompleted ? 'animate-pulse' : ''}`}
+                            className={`grid grid-cols-9 ${isNewlyCompleted ? 'animate-pulse' : ''}`}
                         >
                             {row.map((num, colIndex) => {
                                 const drawn = isNumberDrawn(num);
+                                const drawnInCompletedRow = drawn && isRowCompleted;
                                 return (
                                     <div
                                         key={colIndex}
@@ -58,7 +59,9 @@ export default function LottoCard({ cardNumber, grid, compact, drawnNumbers = []
                                             ${compact ? 'text-xs sm:text-sm' : ''}
                                             ${num !== null
                                                 ? drawn
-                                                    ? 'font-bold text-white bg-gradient-to-br from-emerald-600 to-emerald-700 shadow-inner'
+                                                    ? drawnInCompletedRow
+                                                        ? 'font-bold text-white bg-gradient-to-br from-amber-500 to-amber-600 shadow-inner'
+                                                        : 'font-bold text-white bg-gradient-to-br from-emerald-600 to-emerald-700 shadow-inner'
                                                     : 'font-bold'
                                                 : ''
                                             }
@@ -72,10 +75,15 @@ export default function LottoCard({ cardNumber, grid, compact, drawnNumbers = []
                                                         color: 'var(--lotto-cell-text)',
                                                         border: `1px solid var(--lotto-card-border)`
                                                     }
-                                                : {
-                                                    background: 'var(--lotto-cell-empty)',
-                                                    border: `1px solid var(--lotto-card-border)`
-                                                }
+                                                : isRowCompleted
+                                                    ? {
+                                                        background: 'rgba(245, 158, 11, 0.25)',
+                                                        border: `1px solid var(--lotto-card-border)`
+                                                    }
+                                                    : {
+                                                        background: 'var(--lotto-cell-empty)',
+                                                        border: `1px solid var(--lotto-card-border)`
+                                                    }
                                         }
                                     >
                                         {num}
