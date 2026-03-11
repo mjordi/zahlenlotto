@@ -562,36 +562,27 @@ export default function NumberDrawer({
 
             {/* Gezogene Zahlen Liste */}
             <div className="glass-panel p-6 md:p-8 relative overflow-hidden">
-                <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-purple-500/50 to-transparent"></div>
-                <h2 className="text-center font-display text-2xl font-bold mb-6 bg-clip-text text-transparent bg-gradient-to-r from-purple-400 to-pink-400">
+                <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-amber-500/50 to-transparent"></div>
+                <h2 className="text-center font-display text-2xl font-bold mb-6 bg-clip-text text-transparent bg-gradient-to-r from-amber-400 to-amber-600">
                     {t.drawnNumbersList}
                 </h2>
-                <div className="flex flex-wrap gap-2.5 justify-center min-h-[50px] items-center">
+                <div className="flex flex-wrap gap-2 justify-center min-h-[50px] items-center">
                     {drawnNumbers.length === 0 ? (
                         <span className="italic" style={{ color: 'var(--text-muted)' }}>{t.noNumbersDrawn}</span>
                     ) : (
-                        <>
-                            {(showAllDrawn ? drawnNumbers : drawnNumbers.slice(-20)).map((num, idx) => {
-                                const actualIdx = showAllDrawn ? idx : drawnNumbers.length - 20 + idx;
-                                const displayIdx = actualIdx < 0 ? idx : actualIdx;
-                                return (
-                                    <div
-                                        key={`${displayIdx}-${num}`}
-                                        className="relative flex flex-col items-center"
-                                    >
-                                        <div className="text-[9px] font-medium mb-0.5" style={{ color: 'var(--text-muted)' }}>
-                                            #{displayIdx + 1}
-                                        </div>
-                                        <div
-                                            className="w-10 h-10 bg-gradient-to-br from-amber-500 to-amber-700 rounded-full flex items-center justify-center font-display font-bold text-white text-sm shadow-lg border border-amber-400/30 animate-draw"
-                                            style={{ animationDelay: `${(showAllDrawn ? idx : idx) * 0.03}s` }}
-                                        >
-                                            {num}
-                                        </div>
-                                    </div>
-                                );
-                            })}
-                        </>
+                        (showAllDrawn ? drawnNumbers : drawnNumbers.slice(-20)).map((num, idx) => {
+                            const isLatest = !showAllDrawn
+                                ? idx === Math.min(drawnNumbers.length, 20) - 1
+                                : idx === drawnNumbers.length - 1;
+                            return (
+                                <div
+                                    key={`${idx}-${num}`}
+                                    className={`w-9 h-9 bg-gradient-to-br from-amber-500 to-amber-700 rounded-full flex items-center justify-center font-display font-bold text-white text-sm shadow-md border border-amber-400/30 ${isLatest ? 'ring-2 ring-amber-400/50 scale-110' : ''}`}
+                                >
+                                    {num}
+                                </div>
+                            );
+                        })
                     )}
                 </div>
                 {drawnNumbers.length > 20 && (
