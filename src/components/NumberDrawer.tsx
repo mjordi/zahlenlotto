@@ -297,7 +297,9 @@ export default function NumberDrawer({
                     }
         `}>
                     {currentNumber !== null && (
-                        <div className="absolute inset-0 rounded-full bg-gradient-to-b from-white/25 to-transparent pointer-events-none" style={{ height: '45%' }} />
+                        <div className="absolute inset-0 rounded-full overflow-hidden pointer-events-none">
+                            <div className="absolute inset-x-0 top-0 h-[45%] bg-gradient-to-b from-white/25 to-transparent" />
+                        </div>
                     )}
                     <span className="relative z-10 drop-shadow-lg">{currentNumber !== null ? currentNumber : '?'}</span>
                 </div>
