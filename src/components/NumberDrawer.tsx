@@ -148,11 +148,11 @@ export default function NumberDrawer({
             playCelebrationSound();
             triggerConfetti();
 
-            // Hide celebration after 5 seconds
+            // Hide celebration after 3 seconds (also dismissible by click)
             setTimeout(() => {
                 setShowCelebration(false);
                 setCelebratingPlayers([]);
-            }, 5000);
+            }, 3000);
         }
 
         previousDrawnRef.current = newDrawnNumbers;
@@ -342,28 +342,41 @@ export default function NumberDrawer({
             {/* Two Column Layout: Numbers Overview and Playing Cards */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 {/* Zahlenübersicht */}
-                <div className="glass-panel p-6 md:p-8">
-                    <h2 className="text-center font-display text-2xl font-bold mb-6 bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-amber-400">
+                <div className="glass-panel p-6 md:p-8 relative overflow-hidden">
+                    <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-emerald-500/50 to-transparent"></div>
+                    <h2 className="text-center font-display text-2xl font-bold mb-6 bg-clip-text text-transparent bg-gradient-to-r from-emerald-400 to-blue-400">
                         {t.allNumbersOverview}
                     </h2>
 
-                    {/* Zahlen Grid */}
-                    <div className="grid grid-cols-10 gap-2 mb-8">
+                    {/* Column Headers */}
+                    <div className="grid grid-cols-10 gap-x-0 gap-y-0 mb-1 px-0.5">
+                        {['1-9', '10-19', '20-29', '30-39', '40-49', '50-59', '60-69', '70-79', '80-89', '90'].map((label, i) => (
+                            <div key={i} className="text-center text-[9px] md:text-[10px] font-medium truncate px-0.5" style={{ color: 'var(--text-muted)' }}>
+                                {label}
+                            </div>
+                        ))}
+                    </div>
+
+                    {/* Zahlen Grid - organized by column groups */}
+                    <div className="grid grid-cols-10 gap-1.5 md:gap-2 mb-8">
                         {Array.from({ length: TOTAL_NUMBERS }, (_, i) => i + 1).map(num => {
                             const drawn = isNumberDrawn(num);
                             const isJustDrawn = num === justDrawn;
+                            const col = (num - 1) % 10;
+                            const isLastInGroup = col === 9;
 
                             return (
                                 <div
                                     key={num}
                                     className={`
-                      aspect-square flex items-center justify-center rounded-lg font-display font-semibold text-sm md:text-base
+                      aspect-square flex items-center justify-center rounded-lg font-display font-semibold text-xs md:text-base
                       transition-all duration-500 border
                       ${drawn
                                             ? 'bg-gradient-to-br from-emerald-600 to-emerald-800 text-white border-emerald-400/50 shadow-lg shadow-emerald-500/20 scale-105'
                                             : 'border'
                                         }
                       ${isJustDrawn ? 'animate-bounce scale-125 z-10' : ''}
+                      ${!isLastInGroup && !drawn ? 'grid-col-separator' : ''}
                     `}
                                     style={!drawn ? {
                                         background: 'var(--lotto-cell-empty)',
@@ -380,7 +393,7 @@ export default function NumberDrawer({
                     {/* Statistik */}
                     <div className="flex justify-center gap-12 flex-wrap pt-6" style={{ borderTop: `1px solid var(--glass-border)` }}>
                         <div className="text-center">
-                            <div className="font-display text-3xl font-bold text-blue-500">{drawnNumbers.length}</div>
+                            <div className="font-display text-3xl font-bold text-emerald-500">{drawnNumbers.length}</div>
                             <div className="text-sm uppercase tracking-wider font-medium" style={{ color: 'var(--text-muted)' }}>{t.drawn}</div>
                         </div>
                         <div className="text-center">
@@ -391,10 +404,11 @@ export default function NumberDrawer({
                 </div>
 
                 {/* Playing Cards Display or Generate Cards Prompt */}
-                <div className="glass-panel p-6 md:p-8">
+                <div className="glass-panel p-6 md:p-8 relative overflow-hidden">
+                    <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-amber-500/50 to-transparent"></div>
                     {generatedCards.length > 0 ? (
                         <>
-                            <h2 className="text-center font-display text-2xl font-bold mb-6 bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-amber-400">
+                            <h2 className="text-center font-display text-2xl font-bold mb-6 bg-clip-text text-transparent bg-gradient-to-r from-amber-400 to-orange-400">
                                 {t.playingCards}
                             </h2>
                             <div className="text-center text-sm mb-4" style={{ color: 'var(--text-muted)' }}>
@@ -445,7 +459,7 @@ export default function NumberDrawer({
                         </>
                     ) : (
                         <>
-                            <h2 className="text-center font-display text-2xl font-bold mb-6 bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-amber-400">
+                            <h2 className="text-center font-display text-2xl font-bold mb-6 bg-clip-text text-transparent bg-gradient-to-r from-amber-400 to-orange-400">
                                 {t.tabGenerateCards}
                             </h2>
                             <div className="flex flex-col items-center justify-center">
@@ -520,8 +534,9 @@ export default function NumberDrawer({
             </div>
 
             {/* Gezogene Zahlen Liste */}
-            <div className="glass-panel p-6 md:p-8">
-                <h2 className="text-center font-display text-2xl font-bold mb-6 bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-amber-400">
+            <div className="glass-panel p-6 md:p-8 relative overflow-hidden">
+                <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-purple-500/50 to-transparent"></div>
+                <h2 className="text-center font-display text-2xl font-bold mb-6 bg-clip-text text-transparent bg-gradient-to-r from-purple-400 to-pink-400">
                     {t.drawnNumbersList}
                 </h2>
                 <div className="flex flex-wrap gap-3 justify-center min-h-[50px] items-center">
@@ -544,18 +559,22 @@ export default function NumberDrawer({
             {/* Celebration Overlay */}
             {showCelebration && (
                 <div
-                    className="fixed inset-0 flex items-center justify-center z-[10000] pointer-events-none"
+                    className="fixed inset-0 flex items-center justify-center z-[10000] cursor-pointer"
                     role="alert"
                     aria-live="assertive"
+                    onClick={() => {
+                        setShowCelebration(false);
+                        setCelebratingPlayers([]);
+                    }}
                 >
-                    <div className="bg-gradient-to-br from-amber-400 via-amber-500 to-amber-600 text-white px-16 py-12 rounded-3xl shadow-2xl border-4 border-white/30 animate-bounce">
-                        <div className="font-display text-7xl font-bold tracking-wider drop-shadow-2xl">
+                    <div className="bg-gradient-to-br from-amber-400 via-amber-500 to-amber-600 text-white px-12 md:px-16 py-10 md:py-12 rounded-3xl shadow-2xl border-4 border-white/30 animate-celebration pointer-events-none">
+                        <div className="font-display text-5xl md:text-7xl font-bold tracking-wider drop-shadow-2xl text-center">
                             {t.lottoWin}
                         </div>
-                        <div className="text-2xl font-semibold mt-4 text-center text-white/90">
+                        <div className="font-display text-xl md:text-2xl font-semibold mt-4 text-center text-white/90">
                             {celebratingPlayers.join(', ')}
                         </div>
-                        <div className="text-xl font-medium mt-2 text-center text-white/80">
+                        <div className="text-base md:text-lg font-medium mt-2 text-center text-white/70">
                             {t.rowComplete}
                         </div>
                     </div>

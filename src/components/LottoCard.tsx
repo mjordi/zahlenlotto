@@ -21,22 +21,22 @@ export default function LottoCard({ cardNumber, grid, compact, drawnNumbers = []
 
     return (
         <div
-            className={`rounded-lg p-4 shadow-inner ${compact ? 'text-xs' : ''}`}
+            className={`rounded-lg p-3 shadow-inner ${compact ? 'text-xs' : ''}`}
             style={{
                 border: `1px solid var(--lotto-card-border)`,
                 background: 'var(--lotto-card-bg)'
             }}
         >
             <div className="flex items-center justify-between mb-2">
-                <div className="text-blue-500 font-bold">{t.card} {cardNumber}</div>
+                <div className="font-display text-blue-500 font-bold text-sm">{t.card} {cardNumber}</div>
                 {playerName && (
-                    <div className="text-amber-500 font-semibold text-xs">{playerName}</div>
+                    <div className="font-display text-amber-500 font-semibold text-xs truncate ml-2 max-w-[120px]">{playerName}</div>
                 )}
             </div>
             <div
-                className="grid grid-rows-3 gap-0"
+                className="grid grid-rows-3 gap-0 rounded overflow-hidden"
                 style={{
-                    border: `1px solid var(--lotto-card-border)`
+                    border: `2px solid var(--lotto-card-border)`
                 }}
             >
                 {grid.map((row, rowIndex) => {
@@ -54,11 +54,11 @@ export default function LottoCard({ cardNumber, grid, compact, drawnNumbers = []
                                         key={colIndex}
                                         className={`
                                             aspect-[3/4] flex items-center justify-center
-                                            relative transition-all duration-300
-                                            ${compact ? 'text-[11px] sm:text-xs' : ''}
+                                            relative transition-all duration-300 font-display
+                                            ${compact ? 'text-xs sm:text-sm' : ''}
                                             ${num !== null
                                                 ? drawn
-                                                    ? 'font-bold text-white bg-emerald-700 shadow-inner'
+                                                    ? 'font-bold text-white bg-gradient-to-br from-emerald-600 to-emerald-700 shadow-inner'
                                                     : 'font-bold'
                                                 : ''
                                             }
