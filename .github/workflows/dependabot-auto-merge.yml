@@ -184,7 +184,7 @@ jobs:
             }
             const vercelUrl = new URL(vercelStatus.target_url);
             if (
-              vercelStatus.creator?.type !== 'Bot' ||
+              vercelStatus.creator?.login !== 'vercel[bot]' ||
               (vercelUrl.hostname !== 'vercel.com' && !vercelUrl.hostname.endsWith('.vercel.com'))
             ) {
               throw new Error('The Vercel status was not published by the expected integration.');
