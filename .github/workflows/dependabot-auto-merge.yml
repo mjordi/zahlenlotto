@@ -11,8 +11,9 @@ permissions:
   statuses: read
 
 concurrency:
-  group: dependabot-auto-merge-${{ github.event.workflow_run.head_branch }}
-  cancel-in-progress: true
+  # Serialize dependency merges so every CI run is tested against the base it will enter.
+  group: dependabot-auto-merge-${{ github.repository }}
+  cancel-in-progress: false
 
 jobs:
   auto-merge:
@@ -45,7 +46,18 @@ jobs:
               throw new Error(`CI was triggered by ${run.actor?.login ?? 'an unknown actor'}, not Dependabot.`);
             }
 
+            const testedPull = (run.pull_requests ?? []).find((pull) =>
+              pull.head?.sha === expectedSha && pull.head?.ref === run.head_branch
+            );
+            const testedBaseSha = testedPull?.base?.sha;
+            if (!testedBaseSha) {
+              throw new Error('The successful CI run does not identify the tested base SHA.');
+            }
+
             const { data: repository } = await github.rest.repos.get({ owner, repo });
+            if (testedPull.base.ref !== repository.default_branch) {
+              throw new Error('The successful CI run did not target the current default branch.');
+            }
             const { data: associatedPulls } =
               await github.rest.repos.listPullRequestsAssociatedWithCommit({
                 owner,
@@ -70,6 +82,19 @@ jobs:
             const getPull = async () =>
               (await github.rest.pulls.get({ owner, repo, pull_number: pullNumber })).data;
 
+            const assertBaseUnchanged = async () => {
+              const { data: baseRef } = await github.rest.git.getRef({
+                owner,
+                repo,
+                ref: `heads/${repository.default_branch}`,
+              });
+              if (baseRef.object.sha !== testedBaseSha) {
+                throw new Error(
+                  `The default branch advanced from tested base ${testedBaseSha} to ${baseRef.object.sha}; fresh CI is required.`
+                );
+              }
+            };
+
             const assertUnchangedPull = async () => {
               const pull = await getPull();
               if (
@@ -80,6 +105,7 @@ jobs:
                 pull.head.ref !== run.head_branch ||
                 pull.head.repo?.full_name !== `${owner}/${repo}` ||
                 pull.base.ref !== repository.default_branch ||
+                pull.base.sha !== testedBaseSha ||
                 pull.commits !== 1
               ) {
                 throw new Error('The PR identity, head, base, draft state, or commit count changed.');
@@ -130,6 +156,7 @@ jobs:
               } while (cursor);
             };
 
+            await assertBaseUnchanged();
             await assertUnchangedPull();
 
             const { data: commit } = await github.rest.repos.getCommit({
@@ -192,6 +219,8 @@ jobs:
 
             await assertUnchangedPull();
             await assertNoBlockingReview();
+            // Keep this as the last API read before the SHA-guarded merge.
+            await assertBaseUnchanged();
 
             const { data: result } = await github.rest.pulls.merge({
               owner,
