@@ -11,6 +11,12 @@ updates:
     commit-message:
       prefix: "chore"
       include: "scope"
+    ignore:
+      # Temporary compatibility ceiling: the current Next.js/ESLint stack does not support TypeScript 7.
+      # Remove after the TypeScript 7 upgrade passes CI and Vercel.
+      - dependency-name: "typescript"
+        versions:
+          - ">=7.0.0"
     groups:
       react:
         patterns:
