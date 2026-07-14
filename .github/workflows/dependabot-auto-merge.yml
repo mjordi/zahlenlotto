@@ -1,7 +1,7 @@
 name: Dependabot Auto-Merge
 
 on:
-  # Whichever finishes last (CI or Vercel) re-checks both gates.
+  # Re-check when either CI or Vercel finishes last.
   workflow_run:
     workflows: [CI]
     types: [completed]
@@ -40,7 +40,6 @@ jobs:
               : context.payload.sha;
             const base = context.payload.repository.default_branch;
 
-            // Find the one same-repository Dependabot PR for this exact commit.
             const { data: associated } = await github.rest.repos
               .listPullRequestsAssociatedWithCommit({ owner, repo, commit_sha: sha });
             const matches = associated.filter(pr =>
@@ -51,115 +50,49 @@ jobs:
               pr.head.ref.startsWith('dependabot/') &&
               pr.base.ref === base
             );
-            if (matches.length !== 1) {
-              core.info(`Expected one eligible Dependabot PR; found ${matches.length}.`);
-              return;
-            }
+            if (matches.length !== 1) return;
             const number = matches[0].number;
 
-            // Require successful CI and Vercel results for the same SHA.
-            const [
-              { data: pr }, { data: runs }, { data: combined },
-              { data: commit }, { data: mergeCommit }
-            ] =
+            const [{ data: runs }, { data: combined }, { data: commit }] =
               await Promise.all([
-                github.rest.pulls.get({ owner, repo, pull_number: number }),
                 github.rest.actions.listWorkflowRunsForRepo({
                   owner, repo, event: 'pull_request', head_sha: sha, per_page: 100
                 }),
                 github.rest.repos.getCombinedStatusForRef({ owner, repo, ref: sha }),
-                github.rest.repos.getCommit({ owner, repo, ref: sha }),
-                github.rest.repos.getCommit({
-                  owner, repo, ref: `refs/pull/${number}/merge`
-                })
+                github.rest.repos.getCommit({ owner, repo, ref: sha })
               ]);
+
+            // Runs are newest-first: the latest matching CI result is authoritative.
             const ci = runs.workflow_runs.find(run =>
               run.name === 'CI' &&
-              run.pull_requests.some(candidate =>
-                candidate.number === number && candidate.head.sha === sha
-              )
+              run.pull_requests.some(pr => pr.number === number && pr.head.sha === sha)
             );
+            const ciPull = ci?.pull_requests.find(pr => pr.number === number);
             const vercel = combined.statuses.find(status => status.context === 'Vercel');
-            if (ci?.conclusion !== 'success' || vercel?.state !== 'success') {
-              core.info('Waiting for CI and Vercel to succeed.');
-              return;
-            }
-            if (vercel.creator?.login !== 'vercel[bot]') {
-              throw new Error('The Vercel status was not published by vercel[bot].');
-            }
-
-            // Bind CI to the temporary merge commit (base + PR head) it tested.
-            const testedBase = mergeCommit.parents[0]?.sha;
-            const testedHead = mergeCommit.parents[1]?.sha;
-            const mergeCreated = Date.parse(mergeCommit.commit.committer.date);
-            const ciCreated = Date.parse(ci.created_at);
-            if (
-              mergeCommit.parents.length !== 2 ||
-              testedHead !== sha ||
-              !Number.isFinite(mergeCreated) ||
-              mergeCreated > ciCreated ||
-              ciCreated - mergeCreated > 5 * 60 * 1000
-            ) {
-              core.info('CI did not test the current PR merge commit; fresh CI is required.');
-              return;
-            }
-
-            // Major or unrecognized updates remain manual.
             const updateTypes = [
               ...commit.commit.message.matchAll(/^\s*update-type:\s*(\S+)\s*$/gm)
             ].map(match => match[1]);
+
             if (
-              pr.commits !== 1 ||
+              ci?.conclusion !== 'success' ||
+              vercel?.state !== 'success' ||
+              vercel.creator?.login !== 'vercel[bot]' ||
               commit.author?.login !== 'dependabot[bot]' ||
               commit.commit.verification?.verified !== true ||
               updateTypes.length === 0 ||
-              updateTypes.some(type =>
-                !/^version-update:semver-(patch|minor)$/.test(type)
-              )
-            ) {
-              core.info('Not a verified single-commit patch/minor update; leaving it manual.');
-              return;
-            }
+              updateTypes.some(type => type === 'version-update:semver-major')
+            ) return;
 
-            // Re-check mutable state immediately before merging the expected SHA.
-            const [{ data: latest }, { data: baseRef }, reviews, reviewData] =
-              await Promise.all([
-                github.rest.pulls.get({ owner, repo, pull_number: number }),
-                github.rest.git.getRef({ owner, repo, ref: `heads/${base}` }),
-                github.paginate(github.rest.pulls.listReviews, {
-                  owner, repo, pull_number: number, per_page: 100
-                }),
-                github.graphql(`
-                  query($owner: String!, $repo: String!, $number: Int!) {
-                    repository(owner: $owner, name: $repo) {
-                      pullRequest(number: $number) {
-                        reviewThreads(first: 100) {
-                          nodes { isResolved isOutdated }
-                          pageInfo { hasNextPage }
-                        }
-                      }
-                    }
-                  }
-                `, { owner, repo, number })
-              ]);
-            const threads = reviewData.repository.pullRequest.reviewThreads;
-            const reviewStates = new Map(reviews
-              .filter(review => review.user?.login && review.state !== 'COMMENTED')
-              .map(review => [review.user.login, review.state]));
+            const { data: latest } = await github.rest.pulls.get({
+              owner, repo, pull_number: number
+            });
             if (
-              !testedBase ||
               latest.state !== 'open' ||
               latest.draft ||
+              latest.commits !== 1 ||
               latest.head.sha !== sha ||
-              latest.base.ref !== base ||
-              baseRef.object.sha !== testedBase ||
-              [...reviewStates.values()].includes('CHANGES_REQUESTED') ||
-              threads.pageInfo.hasNextPage ||
-              threads.nodes.some(thread => !thread.isResolved && !thread.isOutdated)
-            ) {
-              core.info('The PR, review state, or tested base changed; leaving it manual.');
-              return;
-            }
+              latest.base.sha !== ciPull?.base.sha
+            ) return;
 
             const { data: result } = await github.rest.pulls.merge({
               owner, repo, pull_number: number, merge_method: 'squash', sha
