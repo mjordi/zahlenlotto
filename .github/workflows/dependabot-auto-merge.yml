@@ -75,13 +75,12 @@ jobs:
               ]);
             const ci = runs.workflow_runs.find(run =>
               run.name === 'CI' &&
-              run.conclusion === 'success' &&
               run.pull_requests.some(candidate =>
                 candidate.number === number && candidate.head.sha === sha
               )
             );
             const vercel = combined.statuses.find(status => status.context === 'Vercel');
-            if (!ci || vercel?.state !== 'success') {
+            if (ci?.conclusion !== 'success' || vercel?.state !== 'success') {
               core.info('Waiting for CI and Vercel to succeed.');
               return;
             }
@@ -123,13 +122,30 @@ jobs:
             }
 
             // Re-check mutable state immediately before merging the expected SHA.
-            const [{ data: latest }, { data: baseRef }, reviews] = await Promise.all([
-              github.rest.pulls.get({ owner, repo, pull_number: number }),
-              github.rest.git.getRef({ owner, repo, ref: `heads/${base}` }),
-              github.paginate(github.rest.pulls.listReviews, {
-                owner, repo, pull_number: number, per_page: 100
-              })
-            ]);
+            const [{ data: latest }, { data: baseRef }, reviews, reviewData] =
+              await Promise.all([
+                github.rest.pulls.get({ owner, repo, pull_number: number }),
+                github.rest.git.getRef({ owner, repo, ref: `heads/${base}` }),
+                github.paginate(github.rest.pulls.listReviews, {
+                  owner, repo, pull_number: number, per_page: 100
+                }),
+                github.graphql(`
+                  query($owner: String!, $repo: String!, $number: Int!) {
+                    repository(owner: $owner, name: $repo) {
+                      pullRequest(number: $number) {
+                        reviewThreads(first: 100) {
+                          nodes { isResolved isOutdated }
+                          pageInfo { hasNextPage }
+                        }
+                      }
+                    }
+                  }
+                `, { owner, repo, number })
+              ]);
+            const threads = reviewData.repository.pullRequest.reviewThreads;
+            const reviewStates = new Map(reviews
+              .filter(review => review.user?.login && review.state !== 'COMMENTED')
+              .map(review => [review.user.login, review.state]));
             if (
               !testedBase ||
               latest.state !== 'open' ||
@@ -137,7 +153,9 @@ jobs:
               latest.head.sha !== sha ||
               latest.base.ref !== base ||
               baseRef.object.sha !== testedBase ||
-              reviews.some(review => review.state === 'CHANGES_REQUESTED')
+              [...reviewStates.values()].includes('CHANGES_REQUESTED') ||
+              threads.pageInfo.hasNextPage ||
+              threads.nodes.some(thread => !thread.isResolved && !thread.isOutdated)
             ) {
               core.info('The PR, review state, or tested base changed; leaving it manual.');
               return;
