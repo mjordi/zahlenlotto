@@ -58,14 +58,20 @@ jobs:
             const number = matches[0].number;
 
             // Require successful CI and Vercel results for the same SHA.
-            const [{ data: pr }, { data: runs }, { data: combined }, { data: commit }] =
+            const [
+              { data: pr }, { data: runs }, { data: combined },
+              { data: commit }, { data: mergeCommit }
+            ] =
               await Promise.all([
                 github.rest.pulls.get({ owner, repo, pull_number: number }),
                 github.rest.actions.listWorkflowRunsForRepo({
                   owner, repo, event: 'pull_request', head_sha: sha, per_page: 100
                 }),
                 github.rest.repos.getCombinedStatusForRef({ owner, repo, ref: sha }),
-                github.rest.repos.getCommit({ owner, repo, ref: sha })
+                github.rest.repos.getCommit({ owner, repo, ref: sha }),
+                github.rest.repos.getCommit({
+                  owner, repo, ref: `refs/pull/${number}/merge`
+                })
               ]);
             const ci = runs.workflow_runs.find(run =>
               run.name === 'CI' &&
@@ -81,6 +87,22 @@ jobs:
             }
             if (vercel.creator?.login !== 'vercel[bot]') {
               throw new Error('The Vercel status was not published by vercel[bot].');
+            }
+
+            // Bind CI to the temporary merge commit (base + PR head) it tested.
+            const testedBase = mergeCommit.parents[0]?.sha;
+            const testedHead = mergeCommit.parents[1]?.sha;
+            const mergeCreated = Date.parse(mergeCommit.commit.committer.date);
+            const ciCreated = Date.parse(ci.created_at);
+            if (
+              mergeCommit.parents.length !== 2 ||
+              testedHead !== sha ||
+              !Number.isFinite(mergeCreated) ||
+              mergeCreated > ciCreated ||
+              ciCreated - mergeCreated > 5 * 60 * 1000
+            ) {
+              core.info('CI did not test the current PR merge commit; fresh CI is required.');
+              return;
             }
 
             // Major or unrecognized updates remain manual.
@@ -101,9 +123,6 @@ jobs:
             }
 
             // Re-check mutable state immediately before merging the expected SHA.
-            const testedBase = ci.pull_requests.find(candidate =>
-              candidate.number === number
-            )?.base.sha;
             const [{ data: latest }, { data: baseRef }, reviews] = await Promise.all([
               github.rest.pulls.get({ owner, repo, pull_number: number }),
               github.rest.git.getRef({ owner, repo, ref: `heads/${base}` }),
