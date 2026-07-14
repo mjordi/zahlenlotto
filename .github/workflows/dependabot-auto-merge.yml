@@ -35,24 +35,25 @@ jobs:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
             const { owner, repo } = context.repo;
-            const sha = context.eventName === 'workflow_run'
+            const eventSha = context.eventName === 'workflow_run'
               ? context.payload.workflow_run.head_sha
               : context.payload.sha;
             const base = context.payload.repository.default_branch;
 
             const { data: associated } = await github.rest.repos
-              .listPullRequestsAssociatedWithCommit({ owner, repo, commit_sha: sha });
-            const matches = associated.filter(pr =>
-              pr.state === 'open' &&
-              pr.user?.login === 'dependabot[bot]' &&
-              pr.head.sha === sha &&
-              pr.head.repo?.full_name === `${owner}/${repo}` &&
-              pr.head.ref.startsWith('dependabot/') &&
-              pr.base.ref === base
+              .listPullRequestsAssociatedWithCommit({
+                owner, repo, commit_sha: eventSha
+              });
+            const pr = associated.find(candidate =>
+              candidate.state === 'open' &&
+              candidate.user?.login === 'dependabot[bot]' &&
+              candidate.head.repo?.full_name === `${owner}/${repo}` &&
+              candidate.head.ref.startsWith('dependabot/') &&
+              candidate.base.ref === base
             );
-            if (matches.length !== 1) return;
-            const number = matches[0].number;
+            if (!pr) return;
 
+            const sha = pr.head.sha;
             const [{ data: runs }, { data: combined }, { data: commit }] =
               await Promise.all([
                 github.rest.actions.listWorkflowRunsForRepo({
@@ -62,12 +63,10 @@ jobs:
                 github.rest.repos.getCommit({ owner, repo, ref: sha })
               ]);
 
-            // Runs are newest-first: the latest matching CI result is authoritative.
             const ci = runs.workflow_runs.find(run =>
               run.name === 'CI' &&
-              run.pull_requests.some(pr => pr.number === number && pr.head.sha === sha)
+              run.pull_requests.some(candidate => candidate.number === pr.number)
             );
-            const ciPull = ci?.pull_requests.find(pr => pr.number === number);
             const vercel = combined.statuses.find(status => status.context === 'Vercel');
             const updateTypes = [
               ...commit.commit.message.matchAll(/^\s*update-type:\s*(\S+)\s*$/gm)
@@ -80,21 +79,10 @@ jobs:
               commit.author?.login !== 'dependabot[bot]' ||
               commit.commit.verification?.verified !== true ||
               updateTypes.length === 0 ||
-              updateTypes.some(type => type === 'version-update:semver-major')
-            ) return;
-
-            const { data: latest } = await github.rest.pulls.get({
-              owner, repo, pull_number: number
-            });
-            if (
-              latest.state !== 'open' ||
-              latest.draft ||
-              latest.commits !== 1 ||
-              latest.head.sha !== sha ||
-              latest.base.sha !== ciPull?.base.sha
+              updateTypes.includes('version-update:semver-major')
             ) return;
 
             const { data: result } = await github.rest.pulls.merge({
-              owner, repo, pull_number: number, merge_method: 'squash', sha
+              owner, repo, pull_number: pr.number, merge_method: 'squash'
             });
             if (!result.merged) throw new Error(result.message || 'GitHub refused the merge.');
