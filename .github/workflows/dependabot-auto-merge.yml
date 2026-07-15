@@ -65,6 +65,7 @@ jobs:
 
             const ci = runs.workflow_runs.find(run =>
               run.name === 'CI' &&
+              run.actor?.login === 'dependabot[bot]' &&
               run.pull_requests.some(candidate => candidate.number === pr.number)
             );
             const vercel = combined.statuses.find(status => status.context === 'Vercel');
@@ -83,6 +84,6 @@ jobs:
             ) return;
 
             const { data: result } = await github.rest.pulls.merge({
-              owner, repo, pull_number: pr.number, merge_method: 'squash'
+              owner, repo, pull_number: pr.number, merge_method: 'squash', sha
             });
             if (!result.merged) throw new Error(result.message || 'GitHub refused the merge.');
