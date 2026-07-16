@@ -83,6 +83,10 @@ jobs:
               updateTypes.includes('version-update:semver-major')
             ) return;
 
+            const { data: comparison } = await github.rest.repos
+              .compareCommits({ owner, repo, base, head: sha });
+            if (!['ahead', 'identical'].includes(comparison.status)) return;
+
             const { data: result } = await github.rest.pulls.merge({
               owner, repo, pull_number: pr.number, merge_method: 'squash', sha
             });
