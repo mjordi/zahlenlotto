@@ -55,7 +55,7 @@ jobs:
               candidate.base.ref === base
             );
             if (!pr) return skip(`no open Dependabot PR associated with ${eventSha}`);
-            core.info(`PR #${pr.number} head=${pr.head.sha}`);
+            core.info(`PR #${pr.number} head=${pr.head.sha} branch=${pr.head.ref}`);
 
             const sha = pr.head.sha;
             const [{ data: runs }, { data: combined }, { data: commit }] =
@@ -67,17 +67,23 @@ jobs:
                 github.rest.repos.getCommit({ owner, repo, ref: sha })
               ]);
 
-            // Any successful "CI" run for this exact commit. head_sha already scopes
-            // to this PR head, so we deliberately do NOT cross-check run.pull_requests
-            // (that array is frequently empty and was silently blocking every merge).
+            // Successful "CI" run for THIS PR's own branch + head commit. head_sha is
+            // set by the API filter; we additionally pin to the PR's branch and repo
+            // (reliable fields) so a fork run or another PR sharing the SHA cannot
+            // satisfy the gate while this PR's own CI failed. We deliberately avoid
+            // run.pull_requests — it is frequently empty and silently blocked every
+            // merge before this fix.
             const ciRuns = runs.workflow_runs
               .filter(run => run.name === 'CI')
-              .map(run => `${run.id}:${run.conclusion}`);
+              .map(run => `${run.id}:${run.conclusion}:${run.head_branch}`);
             const ci = runs.workflow_runs.find(run =>
-              run.name === 'CI' && run.conclusion === 'success'
+              run.name === 'CI' &&
+              run.conclusion === 'success' &&
+              run.head_branch === pr.head.ref &&
+              run.head_repository?.full_name === `${owner}/${repo}`
             );
-            core.info(`CI runs for head: [${ciRuns.join(', ') || 'none'}]`);
-            if (!ci) return skip('no successful CI run for head sha');
+            core.info(`CI runs for head: [${ciRuns.join(', ') || 'none'}] want branch=${pr.head.ref}`);
+            if (!ci) return skip('no successful CI run for this PR branch + head sha');
 
             const vercel = combined.statuses.find(status =>
               status.context.startsWith('Vercel')
