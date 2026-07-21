@@ -24,7 +24,7 @@ jobs:
        github.event.workflow_run.event == 'pull_request' &&
        github.event.workflow_run.conclusion == 'success') ||
       (github.event_name == 'status' &&
-       github.event.context == 'Vercel' &&
+       startsWith(github.event.context, 'Vercel') &&
        github.event.state == 'success')
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -35,10 +35,13 @@ jobs:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
             const { owner, repo } = context.repo;
+            const skip = (reason) => core.info(`Skip: ${reason}`);
+
             const eventSha = context.eventName === 'workflow_run'
               ? context.payload.workflow_run.head_sha
               : context.payload.sha;
             const base = context.payload.repository.default_branch;
+            core.info(`event=${context.eventName} sha=${eventSha} base=${base}`);
 
             const { data: associated } = await github.rest.repos
               .listPullRequestsAssociatedWithCommit({
@@ -51,7 +54,8 @@ jobs:
               candidate.head.ref.startsWith('dependabot/') &&
               candidate.base.ref === base
             );
-            if (!pr) return;
+            if (!pr) return skip(`no open Dependabot PR associated with ${eventSha}`);
+            core.info(`PR #${pr.number} head=${pr.head.sha} branch=${pr.head.ref}`);
 
             const sha = pr.head.sha;
             const [{ data: runs }, { data: combined }, { data: commit }] =
@@ -63,31 +67,49 @@ jobs:
                 github.rest.repos.getCommit({ owner, repo, ref: sha })
               ]);
 
-            const ci = runs.workflow_runs.find(run =>
-              run.name === 'CI' &&
-              run.actor?.login === 'dependabot[bot]' &&
-              run.pull_requests.some(candidate => candidate.number === pr.number)
+            // The LATEST "CI" run for THIS PR's branch + head commit must be green.
+            // We take the most recent attempt (newest created_at) and require it to
+            // have succeeded — never an older success that a later re-run turned red.
+            // head_sha (API filter) + branch + repo pin the run to this PR without
+            // run.pull_requests, which is frequently empty and silently blocked every
+            // merge before this fix.
+            const ciRuns = runs.workflow_runs
+              .filter(run =>
+                run.name === 'CI' &&
+                run.head_branch === pr.head.ref &&
+                run.head_repository?.full_name === `${owner}/${repo}`
+              )
+              .sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+            core.info(`CI runs for head (newest first): [${ciRuns.map(run => `${run.id}:${run.status}:${run.conclusion}`).join(', ') || 'none'}] branch=${pr.head.ref}`);
+            const latestCi = ciRuns[0];
+            if (!latestCi) return skip('no CI run for this PR branch + head sha');
+            if (latestCi.conclusion !== 'success') return skip(`latest CI run ${latestCi.id} is ${latestCi.status}/${latestCi.conclusion}`);
+
+            const vercel = combined.statuses.find(status =>
+              status.context.startsWith('Vercel')
             );
-            const vercel = combined.statuses.find(status => status.context === 'Vercel');
+            core.info(`Vercel: context=${vercel?.context} state=${vercel?.state} creator=${vercel?.creator?.login}`);
+            if (vercel?.state !== 'success') return skip('Vercel deployment status is not success');
+            if (vercel.creator?.login !== 'vercel[bot]') return skip(`Vercel status not from vercel[bot] (was ${vercel.creator?.login})`);
+
+            if (commit.author?.login !== 'dependabot[bot]') return skip(`commit author ${commit.author?.login} != dependabot[bot]`);
+            if (commit.commit.verification?.verified !== true) return skip('commit signature not verified');
+
             const updateTypes = [
               ...commit.commit.message.matchAll(/^\s*update-type:\s*(\S+)\s*$/gm)
             ].map(match => match[1]);
-
-            if (
-              ci?.conclusion !== 'success' ||
-              vercel?.state !== 'success' ||
-              vercel.creator?.login !== 'vercel[bot]' ||
-              commit.author?.login !== 'dependabot[bot]' ||
-              commit.commit.verification?.verified !== true ||
-              updateTypes.length === 0 ||
-              updateTypes.includes('version-update:semver-major')
-            ) return;
+            core.info(`update-types: [${updateTypes.join(', ') || 'none'}]`);
+            if (updateTypes.length === 0) return skip('no update-type trailer found');
+            if (updateTypes.includes('version-update:semver-major')) return skip('major update needs human review');
 
             const { data: comparison } = await github.rest.repos
               .compareCommits({ owner, repo, base, head: sha });
-            if (!['ahead', 'identical'].includes(comparison.status)) return;
+            if (!['ahead', 'identical'].includes(comparison.status)) {
+              return skip(`branch is ${comparison.status} relative to ${base}`);
+            }
 
             const { data: result } = await github.rest.pulls.merge({
               owner, repo, pull_number: pr.number, merge_method: 'squash', sha
             });
             if (!result.merged) throw new Error(result.message || 'GitHub refused the merge.');
+            core.info(`Merged PR #${pr.number}: ${result.sha}`);
