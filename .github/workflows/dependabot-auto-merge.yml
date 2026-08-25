@@ -10,8 +10,8 @@ on:
 permissions:
   actions: read
   contents: write
+  deployments: read
   pull-requests: write
-  statuses: read
 
 concurrency:
   group: dependabot-auto-merge-${{ github.repository }}
@@ -58,12 +58,12 @@ jobs:
             core.info(`PR #${pr.number} head=${pr.head.sha} branch=${pr.head.ref}`);
 
             const sha = pr.head.sha;
-            const [{ data: runs }, { data: combined }, { data: commit }] =
+            const [{ data: runs }, { data: deployments }, { data: commit }] =
               await Promise.all([
                 github.rest.actions.listWorkflowRunsForRepo({
                   owner, repo, event: 'pull_request', head_sha: sha, per_page: 100
                 }),
-                github.rest.repos.getCombinedStatusForRef({ owner, repo, ref: sha }),
+                github.rest.repos.listDeployments({ owner, repo, sha, per_page: 100 }),
                 github.rest.repos.getCommit({ owner, repo, ref: sha })
               ]);
 
@@ -85,12 +85,33 @@ jobs:
             if (!latestCi) return skip('no CI run for this PR branch + head sha');
             if (latestCi.conclusion !== 'success') return skip(`latest CI run ${latestCi.id} is ${latestCi.status}/${latestCi.conclusion}`);
 
-            const vercel = combined.statuses.find(status =>
-              status.context.startsWith('Vercel')
-            );
-            core.info(`Vercel: context=${vercel?.context} state=${vercel?.state} creator=${vercel?.creator?.login}`);
-            if (vercel?.state !== 'success') return skip('Vercel deployment status is not success');
-            if (vercel.creator?.login !== 'vercel[bot]') return skip(`Vercel status not from vercel[bot] (was ${vercel.creator?.login})`);
+            // Authenticate the Vercel deployment via the Deployments API instead
+            // of the legacy commit-status API. `performed_via_github_app` is set
+            // by GitHub itself from the authenticated GitHub App that created the
+            // resource — it is not a caller-supplied field, unlike the old
+            // status's `creator` (which the combined-status API stopped
+            // populating) or `target_url` (which the poster fully controls and
+            // so can never prove who posted it, regardless of how strictly it's
+            // parsed — see the review discussion on PR #373). Creating or
+            // updating a deployment/deployment-status both require the
+            // `deployments:write` permission, a much narrower grant than the
+            // `statuses:write` the previous checks relied on.
+            const vercelDeployment = deployments
+              .filter(d => d.performed_via_github_app?.slug === 'vercel')
+              .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))[0];
+            core.info(`Vercel deployments for sha: [${deployments.map(d => `${d.id}:${d.performed_via_github_app?.slug}`).join(', ') || 'none'}]`);
+            if (!vercelDeployment) return skip('no deployment for this commit was performed via the vercel GitHub App');
+
+            const { data: statuses } = await github.rest.repos.listDeploymentStatuses({
+              owner, repo, deployment_id: vercelDeployment.id, per_page: 100
+            });
+            const latestStatus = statuses
+              .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))[0];
+            core.info(`Latest status for deployment ${vercelDeployment.id}: state=${latestStatus?.state} app=${latestStatus?.performed_via_github_app?.slug}`);
+            if (latestStatus?.state !== 'success') return skip('Vercel deployment status is not success');
+            if (latestStatus.performed_via_github_app?.slug !== 'vercel') {
+              return skip('latest deployment status was not performed via the vercel GitHub App');
+            }
 
             if (commit.author?.login !== 'dependabot[bot]') return skip(`commit author ${commit.author?.login} != dependabot[bot]`);
             if (commit.commit.verification?.verified !== true) return skip('commit signature not verified');
