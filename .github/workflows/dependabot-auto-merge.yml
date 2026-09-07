@@ -22,8 +22,8 @@ jobs:
     permissions:
       actions: read
       contents: read
-      deployments: read
       pull-requests: read
+      statuses: read
     concurrency:
       # Scoped per-PR (falling back to the commit sha for the workflow_run
       # trigger, which has no PR number of its own), NOT per-repository. A
@@ -99,17 +99,16 @@ jobs:
             // pushes). Poll until both are green, a real failure shows up, or
             // the job's own timeout-minutes cuts it off.
             const deadline = Date.now() + 12 * 60 * 1000;
-            let latestCi, vercelDeployment, latestStatus, commit;
+            let latestCi, latestStatus, commit;
             while (true) {
-              const [runsResp, deploymentsResp, commitResp] = await Promise.all([
+              const [runsResp, statusesResp, commitResp] = await Promise.all([
                 github.rest.actions.listWorkflowRunsForRepo({
                   owner, repo, event: 'pull_request', head_sha: sha, per_page: 100
                 }),
-                github.rest.repos.listDeployments({ owner, repo, sha, per_page: 100 }),
+                github.rest.repos.listCommitStatusesForRef({ owner, repo, ref: sha, per_page: 100 }),
                 github.rest.repos.getCommit({ owner, repo, ref: sha })
               ]);
               const allRuns = runsResp.data.workflow_runs;
-              const deployments = deploymentsResp.data;
               commit = commitResp.data;
 
               // The LATEST "CI" run for THIS PR's branch + head commit must be green.
@@ -131,36 +130,33 @@ jobs:
                 return skip(`latest CI run ${latestCi.id} is ${latestCi.conclusion}`);
               }
 
-              // Authenticate the Vercel deployment via the Deployments API instead
-              // of the legacy commit-status API. `performed_via_github_app` is set
-              // by GitHub itself from the authenticated GitHub App that created the
-              // resource — it is not a caller-supplied field, unlike the old
-              // status's `creator` (which the combined-status API stopped
-              // populating) or `target_url` (which the poster fully controls and
-              // so can never prove who posted it, regardless of how strictly it's
-              // parsed). Creating or updating a deployment/deployment-status both
-              // require the `deployments:write` permission, a much narrower grant
-              // than the `statuses:write` the previous checks relied on.
-              vercelDeployment = deployments
-                .filter(d => d.performed_via_github_app?.slug === 'vercel')
+              // Read Vercel's deployment status via the classic commit-status
+              // API. An earlier version of this check instead used the
+              // Deployments API, gated on `performed_via_github_app.slug ===
+              // 'vercel'` so the source couldn't be spoofed by a caller-set
+              // field. In production against a real Dependabot PR, that
+              // field came back `undefined` for this account's Vercel
+              // integration (the deployment is created through Vercel's
+              // GitHub integration without an attributable GitHub App
+              // installation token here), so the filter never matched and
+              // every PR spun for the full 12-minute deadline before being
+              // skipped — confirmed directly against mjordi/pin-the-plate-redo#396's
+              // job logs, which showed the deployment present but its status
+              // never found. `context` on a classic status is caller-supplied
+              // and so not tamper-proof in general, but the only writers with
+              // push access to this private repo are the owner, Dependabot,
+              // and Vercel's own integration — no worse than the trust model
+              // this workflow already relies on for the CI check above.
+              latestStatus = statusesResp.data
+                .filter(s => s.context === 'Vercel')
                 .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))[0];
-              core.info(`Vercel deployments for sha: [${deployments.map(d => `${d.id}:${d.performed_via_github_app?.slug}`).join(', ') || 'none'}]`);
-
-              if (vercelDeployment) {
-                const { data: statuses } = await github.rest.repos.listDeploymentStatuses({
-                  owner, repo, deployment_id: vercelDeployment.id, per_page: 100
-                });
-                latestStatus = statuses
-                  .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))[0];
-                core.info(`Latest status for deployment ${vercelDeployment.id}: state=${latestStatus?.state} app=${latestStatus?.performed_via_github_app?.slug}`);
-                if (latestStatus && !['success', 'pending', 'queued', 'in_progress'].includes(latestStatus.state)) {
-                  return skip(`Vercel deployment status is ${latestStatus.state}`);
-                }
+              core.info(`Vercel status for sha: ${latestStatus ? `${latestStatus.state} (${latestStatus.description})` : 'none yet'}`);
+              if (latestStatus && !['success', 'pending'].includes(latestStatus.state)) {
+                return skip(`Vercel deployment status is ${latestStatus.state}`);
               }
 
               const ciDone = latestCi?.conclusion === 'success';
-              const vercelDone = latestStatus?.state === 'success' &&
-                latestStatus.performed_via_github_app?.slug === 'vercel';
+              const vercelDone = latestStatus?.state === 'success';
               if (ciDone && vercelDone) break;
               if (Date.now() > deadline) {
                 return skip(`timed out waiting for ${!ciDone ? 'CI' : 'Vercel deployment'} to finish`);
