@@ -204,8 +204,14 @@ jobs:
       # to change out from under it. Safe to share one lane across all PRs
       # because this job does no polling — one compareCommits + one merge
       # call — so it can't starve the way the old single-job design did.
+      # queue: max is required here: dependabot.yml can open a whole batch
+      # of PRs at once, and with the default queue (single pending slot)
+      # a third PR becoming eligible while one merge runs and another is
+      # already queued would silently cancel that second PR's merge with
+      # no retry — an eligible patch/minor PR left open with no signal why.
       group: dependabot-auto-merge-merge-${{ github.repository }}
       cancel-in-progress: false
+      queue: max
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
