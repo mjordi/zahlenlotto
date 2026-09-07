@@ -1,116 +1,171 @@
 name: Dependabot Auto-Merge
 
 on:
-  # Re-check when either CI or Vercel finishes last.
+  # Primary trigger: fires the instant Dependabot opens or updates a PR.
+  # `pull_request_target` (rather than `pull_request`) is used only so this
+  # keeps working the same way should the PR ever come from a fork; nothing
+  # here checks out PR code, so the elevated token is not a code-execution
+  # risk. Same-repo Dependabot PRs would work with either trigger.
+  pull_request_target:
+    types: [opened, synchronize, reopened]
+  # Secondary nudge: covers the case where something else pushes to main
+  # while this PR's checks are still catching up. `status` was dropped —
+  # Vercel migrated from the legacy commit-status API to the Deployments
+  # API (see the Deployments-API comment below), so it stopped firing the
+  # `status` events this used to listen for.
   workflow_run:
     workflows: [CI]
     types: [completed]
-  status: {}
-
-permissions:
-  actions: read
-  contents: write
-  deployments: read
-  pull-requests: write
-
-concurrency:
-  group: dependabot-auto-merge-${{ github.repository }}
-  cancel-in-progress: false
 
 jobs:
-  auto-merge:
+  wait-for-checks:
+    permissions:
+      actions: read
+      contents: read
+      deployments: read
+      pull-requests: read
+    concurrency:
+      # Scoped per-PR (falling back to the commit sha for the workflow_run
+      # trigger, which has no PR number of its own), NOT per-repository. A
+      # repo-wide group meant that when Dependabot opens several PRs in a
+      # burst (routine — several minutes apart is enough), the first PR's
+      # run occupied the one slot for its full ~12-minute poll (below)
+      # while every other PR's run queued and then got cancelled by the
+      # next arrival, since a non-cancelling group only ever keeps one
+      # pending run. This job is the slow, poll-until-green part, so it
+      # stays parallel per-PR; only the fast merge decision below is
+      # forced back onto one repo-wide lane.
+      group: dependabot-auto-merge-wait-${{ github.repository }}-${{ github.event.pull_request.number || github.event.workflow_run.head_sha }}
+      cancel-in-progress: false
     if: >-
+      (github.event_name == 'pull_request_target' &&
+       github.event.pull_request.user.login == 'dependabot[bot]') ||
       (github.event_name == 'workflow_run' &&
        github.event.workflow_run.event == 'pull_request' &&
-       github.event.workflow_run.conclusion == 'success') ||
-      (github.event_name == 'status' &&
-       startsWith(github.event.context, 'Vercel') &&
-       github.event.state == 'success')
+       github.event.workflow_run.conclusion == 'success')
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    # A pull_request_target run starts the instant Dependabot pushes, long
+    # before CI or the Vercel preview have even started — unlike the old
+    # workflow_run/status triggers, which only ever fired *after* both were
+    # already done. The script below now polls for both, so this needs to
+    # cover a full CI + preview-deploy cycle rather than one quick API check.
+    timeout-minutes: 15
+    outputs:
+      eligible: ${{ steps.check.outputs.eligible }}
+      pr_number: ${{ steps.check.outputs.pr_number }}
+      sha: ${{ steps.check.outputs.sha }}
     steps:
-      - name: Merge eligible Dependabot update
+      - name: Wait for CI + Vercel, then gate on update-type
+        id: check
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
             const { owner, repo } = context.repo;
-            const skip = (reason) => core.info(`Skip: ${reason}`);
+            const skip = (reason) => { core.info(`Skip: ${reason}`); core.setOutput('eligible', 'false'); };
+            const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 
-            const eventSha = context.eventName === 'workflow_run'
-              ? context.payload.workflow_run.head_sha
-              : context.payload.sha;
             const base = context.payload.repository.default_branch;
-            core.info(`event=${context.eventName} sha=${eventSha} base=${base}`);
 
-            const { data: associated } = await github.rest.repos
-              .listPullRequestsAssociatedWithCommit({
-                owner, repo, commit_sha: eventSha
-              });
-            const pr = associated.find(candidate =>
-              candidate.state === 'open' &&
-              candidate.user?.login === 'dependabot[bot]' &&
-              candidate.head.repo?.full_name === `${owner}/${repo}` &&
-              candidate.head.ref.startsWith('dependabot/') &&
-              candidate.base.ref === base
-            );
-            if (!pr) return skip(`no open Dependabot PR associated with ${eventSha}`);
-            core.info(`PR #${pr.number} head=${pr.head.sha} branch=${pr.head.ref}`);
+            // pull_request_target hands us the PR directly. workflow_run (the
+            // secondary trigger) only hands us a commit sha, so fall back to
+            // the same commit-association lookup the old code used.
+            let pr;
+            if (context.eventName === 'pull_request_target') {
+              pr = context.payload.pull_request;
+              core.info(`event=pull_request_target PR #${pr.number} head=${pr.head.sha} branch=${pr.head.ref}`);
+            } else {
+              const eventSha = context.payload.workflow_run.head_sha;
+              core.info(`event=workflow_run sha=${eventSha} base=${base}`);
+              const { data: associated } = await github.rest.repos
+                .listPullRequestsAssociatedWithCommit({
+                  owner, repo, commit_sha: eventSha
+                });
+              pr = associated.find(candidate => candidate.head.sha === eventSha);
+              if (!pr) return skip(`no PR associated with ${eventSha}`);
+              core.info(`PR #${pr.number} head=${pr.head.sha} branch=${pr.head.ref}`);
+            }
+
+            if (pr.state !== 'open') return skip(`PR #${pr.number} is ${pr.state}`);
+            if (pr.user?.login !== 'dependabot[bot]') return skip(`PR author ${pr.user?.login} != dependabot[bot]`);
+            if (pr.head.repo?.full_name !== `${owner}/${repo}`) return skip('head is in a fork');
+            if (!pr.head.ref.startsWith('dependabot/')) return skip(`head ref ${pr.head.ref} is not a dependabot branch`);
+            if (pr.base.ref !== base) return skip(`base is ${pr.base.ref}, not ${base}`);
 
             const sha = pr.head.sha;
-            const [{ data: runs }, { data: deployments }, { data: commit }] =
-              await Promise.all([
+
+            // CI and the Vercel preview are almost never both done yet when
+            // pull_request_target fires (it fires the instant Dependabot
+            // pushes). Poll until both are green, a real failure shows up, or
+            // the job's own timeout-minutes cuts it off.
+            const deadline = Date.now() + 12 * 60 * 1000;
+            let latestCi, vercelDeployment, latestStatus, commit;
+            while (true) {
+              const [runsResp, deploymentsResp, commitResp] = await Promise.all([
                 github.rest.actions.listWorkflowRunsForRepo({
                   owner, repo, event: 'pull_request', head_sha: sha, per_page: 100
                 }),
                 github.rest.repos.listDeployments({ owner, repo, sha, per_page: 100 }),
                 github.rest.repos.getCommit({ owner, repo, ref: sha })
               ]);
+              const allRuns = runsResp.data.workflow_runs;
+              const deployments = deploymentsResp.data;
+              commit = commitResp.data;
 
-            // The LATEST "CI" run for THIS PR's branch + head commit must be green.
-            // We take the most recent attempt (newest created_at) and require it to
-            // have succeeded — never an older success that a later re-run turned red.
-            // head_sha (API filter) + branch + repo pin the run to this PR without
-            // run.pull_requests, which is frequently empty and silently blocked every
-            // merge before this fix.
-            const ciRuns = runs.workflow_runs
-              .filter(run =>
-                run.name === 'CI' &&
-                run.head_branch === pr.head.ref &&
-                run.head_repository?.full_name === `${owner}/${repo}`
-              )
-              .sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
-            core.info(`CI runs for head (newest first): [${ciRuns.map(run => `${run.id}:${run.status}:${run.conclusion}`).join(', ') || 'none'}] branch=${pr.head.ref}`);
-            const latestCi = ciRuns[0];
-            if (!latestCi) return skip('no CI run for this PR branch + head sha');
-            if (latestCi.conclusion !== 'success') return skip(`latest CI run ${latestCi.id} is ${latestCi.status}/${latestCi.conclusion}`);
+              // The LATEST "CI" run for THIS PR's branch + head commit must be green.
+              // We take the most recent attempt (newest created_at) and require it to
+              // have succeeded — never an older success that a later re-run turned red.
+              // head_sha (API filter) + branch + repo pin the run to this PR without
+              // run.pull_requests, which is frequently empty and silently blocked every
+              // merge before this fix.
+              const ciRuns = allRuns
+                .filter(run =>
+                  run.name === 'CI' &&
+                  run.head_branch === pr.head.ref &&
+                  run.head_repository?.full_name === `${owner}/${repo}`
+                )
+                .sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+              latestCi = ciRuns[0];
+              core.info(`CI runs for head (newest first): [${ciRuns.map(run => `${run.id}:${run.status}:${run.conclusion}`).join(', ') || 'none'}] branch=${pr.head.ref}`);
+              if (latestCi && latestCi.status === 'completed' && latestCi.conclusion !== 'success') {
+                return skip(`latest CI run ${latestCi.id} is ${latestCi.conclusion}`);
+              }
 
-            // Authenticate the Vercel deployment via the Deployments API instead
-            // of the legacy commit-status API. `performed_via_github_app` is set
-            // by GitHub itself from the authenticated GitHub App that created the
-            // resource — it is not a caller-supplied field, unlike the old
-            // status's `creator` (which the combined-status API stopped
-            // populating) or `target_url` (which the poster fully controls and
-            // so can never prove who posted it, regardless of how strictly it's
-            // parsed — see the review discussion on PR #373). Creating or
-            // updating a deployment/deployment-status both require the
-            // `deployments:write` permission, a much narrower grant than the
-            // `statuses:write` the previous checks relied on.
-            const vercelDeployment = deployments
-              .filter(d => d.performed_via_github_app?.slug === 'vercel')
-              .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))[0];
-            core.info(`Vercel deployments for sha: [${deployments.map(d => `${d.id}:${d.performed_via_github_app?.slug}`).join(', ') || 'none'}]`);
-            if (!vercelDeployment) return skip('no deployment for this commit was performed via the vercel GitHub App');
+              // Authenticate the Vercel deployment via the Deployments API instead
+              // of the legacy commit-status API. `performed_via_github_app` is set
+              // by GitHub itself from the authenticated GitHub App that created the
+              // resource — it is not a caller-supplied field, unlike the old
+              // status's `creator` (which the combined-status API stopped
+              // populating) or `target_url` (which the poster fully controls and
+              // so can never prove who posted it, regardless of how strictly it's
+              // parsed). Creating or updating a deployment/deployment-status both
+              // require the `deployments:write` permission, a much narrower grant
+              // than the `statuses:write` the previous checks relied on.
+              vercelDeployment = deployments
+                .filter(d => d.performed_via_github_app?.slug === 'vercel')
+                .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))[0];
+              core.info(`Vercel deployments for sha: [${deployments.map(d => `${d.id}:${d.performed_via_github_app?.slug}`).join(', ') || 'none'}]`);
 
-            const { data: statuses } = await github.rest.repos.listDeploymentStatuses({
-              owner, repo, deployment_id: vercelDeployment.id, per_page: 100
-            });
-            const latestStatus = statuses
-              .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))[0];
-            core.info(`Latest status for deployment ${vercelDeployment.id}: state=${latestStatus?.state} app=${latestStatus?.performed_via_github_app?.slug}`);
-            if (latestStatus?.state !== 'success') return skip('Vercel deployment status is not success');
-            if (latestStatus.performed_via_github_app?.slug !== 'vercel') {
-              return skip('latest deployment status was not performed via the vercel GitHub App');
+              if (vercelDeployment) {
+                const { data: statuses } = await github.rest.repos.listDeploymentStatuses({
+                  owner, repo, deployment_id: vercelDeployment.id, per_page: 100
+                });
+                latestStatus = statuses
+                  .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))[0];
+                core.info(`Latest status for deployment ${vercelDeployment.id}: state=${latestStatus?.state} app=${latestStatus?.performed_via_github_app?.slug}`);
+                if (latestStatus && !['success', 'pending', 'queued', 'in_progress'].includes(latestStatus.state)) {
+                  return skip(`Vercel deployment status is ${latestStatus.state}`);
+                }
+              }
+
+              const ciDone = latestCi?.conclusion === 'success';
+              const vercelDone = latestStatus?.state === 'success' &&
+                latestStatus.performed_via_github_app?.slug === 'vercel';
+              if (ciDone && vercelDone) break;
+              if (Date.now() > deadline) {
+                return skip(`timed out waiting for ${!ciDone ? 'CI' : 'Vercel deployment'} to finish`);
+              }
+              await sleep(30_000);
             }
 
             if (commit.author?.login !== 'dependabot[bot]') return skip(`commit author ${commit.author?.login} != dependabot[bot]`);
@@ -123,14 +178,61 @@ jobs:
             if (updateTypes.length === 0) return skip('no update-type trailer found');
             if (updateTypes.includes('version-update:semver-major')) return skip('major update needs human review');
 
+            // Deliberately NOT doing the base-comparison/merge here: this job
+            // runs with per-PR concurrency, so two PRs could both reach this
+            // point against the same base moments apart. Hand off to the
+            // `merge` job below, which re-checks against the base's current
+            // tip and actually merges inside one repo-wide serialized lane —
+            // otherwise the second PR to merge could land on top of the
+            // first's change without ever having been tested against it.
+            core.info(`PR #${pr.number} eligible (sha ${sha}); handing off to the merge job`);
+            core.setOutput('eligible', 'true');
+            core.setOutput('pr_number', String(pr.number));
+            core.setOutput('sha', sha);
+
+  merge:
+    needs: wait-for-checks
+    if: needs.wait-for-checks.outputs.eligible == 'true'
+    permissions:
+      contents: write
+      pull-requests: write
+    concurrency:
+      # Deliberately repo-wide and NOT per-PR: this is the one section that
+      # must be serialized, so that PR B's final "is my base still current"
+      # check and its merge always happen strictly after PR A's merge has
+      # already landed (or not at all), never against a base that's about
+      # to change out from under it. Safe to share one lane across all PRs
+      # because this job does no polling — one compareCommits + one merge
+      # call — so it can't starve the way the old single-job design did.
+      group: dependabot-auto-merge-merge-${{ github.repository }}
+      cancel-in-progress: false
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Re-check against current base and merge
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const { owner, repo } = context.repo;
+            const pull_number = Number('${{ needs.wait-for-checks.outputs.pr_number }}');
+            const sha = '${{ needs.wait-for-checks.outputs.sha }}';
+
+            const { data: repoInfo } = await github.rest.repos.get({ owner, repo });
+            const base = repoInfo.default_branch;
+
+            // Re-verify right before merging, inside the serialized lane: an
+            // earlier PR merged by a concurrent run of this same job may have
+            // moved `base` since the wait job last checked.
             const { data: comparison } = await github.rest.repos
               .compareCommits({ owner, repo, base, head: sha });
             if (!['ahead', 'identical'].includes(comparison.status)) {
-              return skip(`branch is ${comparison.status} relative to ${base}`);
+              core.info(`Skip: PR #${pull_number} branch is ${comparison.status} relative to ${base} (base moved since eligibility check)`);
+              return;
             }
 
             const { data: result } = await github.rest.pulls.merge({
-              owner, repo, pull_number: pr.number, merge_method: 'squash', sha
+              owner, repo, pull_number, merge_method: 'squash', sha
             });
             if (!result.merged) throw new Error(result.message || 'GitHub refused the merge.');
-            core.info(`Merged PR #${pr.number}: ${result.sha}`);
+            core.info(`Merged PR #${pull_number}: ${result.sha}`);
