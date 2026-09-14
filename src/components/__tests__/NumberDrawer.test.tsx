@@ -146,6 +146,16 @@ describe('NumberDrawer', () => {
             expect(screen.getByRole('button', { name: /Neu starten/i })).toBeDisabled();
         });
 
+        it('should hold card generation until a resuming host has read the session', () => {
+            // Generating pre-hydration would push the empty board and wipe the
+            // stored draw history for every guest.
+            syncState = { syncUnavailable: false, isHydrating: true };
+
+            renderDrawer({ sessionData: SESSION, joinedFromUrl: false, generatedCards: [] });
+
+            expect(screen.getByRole('button', { name: /Karten generieren/i })).toBeDisabled();
+        });
+
         it('should keep draw and restart enabled for a host', () => {
             renderDrawer({ sessionData: SESSION, joinedFromUrl: false });
 

@@ -406,6 +406,11 @@ export default function NumberDrawer({
 
     // Generate cards function with seeded randomness for shareable URLs
     const generateCards = useCallback(() => {
+        // Same gate as drawing: generating before the resume read lands would
+        // push the empty pre-hydration board and wipe the stored draw history
+        // for every guest.
+        if (!isHost || isHydrating || !sessionResolved) return;
+
         setIsGenerating(true);
         setTimeout(() => {
             // Claim the session first (reusing the seed of a draw-only session),
@@ -433,7 +438,7 @@ export default function NumberDrawer({
                 currentNumber
             );
         }, 100);
-    }, [numberOfPlayers, cardsPerPlayer, playerNames, setGeneratedCards, setSessionData, drawnNumbers, currentNumber, generateCardsFromConfig, pushCardConfig, ensureHostSession]);
+    }, [numberOfPlayers, cardsPerPlayer, playerNames, setGeneratedCards, setSessionData, drawnNumbers, currentNumber, generateCardsFromConfig, pushCardConfig, ensureHostSession, isHost, isHydrating, sessionResolved]);
 
     // Export to PDF function
     const exportToPDF = useCallback(() => {
@@ -835,7 +840,7 @@ export default function NumberDrawer({
                                     </div>
                                     <button
                                         onClick={generateCards}
-                                        disabled={isGenerating}
+                                        disabled={isGenerating || isHydrating || !sessionResolved}
                                         className="btn-primary w-full disabled:opacity-50 disabled:cursor-not-allowed"
                                         aria-label={isGenerating ? t.generating : t.generateCards}
                                     >

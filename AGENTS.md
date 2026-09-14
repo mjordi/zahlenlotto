@@ -130,7 +130,8 @@ The app supports shareable URLs for game sessions:
   token for that seed, not by the mere presence of `?s=` - otherwise a host
   returning to its own session would be demoted to a spectator.
 - The URL can only be read in an effect, so the first paint does not yet know
-  the role. `sessionResolved` keeps draw and reset disabled until it does: a
+  the role. `sessionResolved` keeps draw, reset **and card generation**
+  disabled until it does: a
   draw in that window would mint a new seed and `setSeedInUrl()` would overwrite
   the incoming share link, leaving the guest unable to rejoin even by reloading.
 - **Cross-device sync**: Polling with Vercel KV for state sync across different devices
@@ -158,10 +159,12 @@ The cross-device sync uses a polling-based approach with Vercel KV:
 - The sequence check and the write happen together. The in-memory store does
   read-check-write in one synchronous block, which Node's single thread makes
   indivisible.
-- On Vercel KV they are still two round trips, so a narrow window remains.
-  Reaching it needs two concurrent host writers, which the design rules out:
-  the host token lives in `sessionStorage` (per tab), so a session has exactly
-  one host tab, and that tab chains its writes.
+- On Vercel KV they are still two round trips, so a window remains. A single
+  host tab cannot hit it (it chains its writes), but **two host tabs can**:
+  duplicating a tab, or opening a link from it, copies `sessionStorage` in
+  Chrome and Firefox, so the clone reads the same host token and also
+  classifies itself as host. Do not rely on "one host tab per session" - that
+  premise is false.
 - **Known gap**: closing it completely needs a Lua compare-and-set via
   `kv.eval()`, which cannot be verified without a live KV instance. Do not ship
   one untested - a wrong script breaks the only production write path, which is
@@ -181,7 +184,9 @@ The cross-device sync uses a polling-based approach with Vercel KV:
   refreshed host resumes the session instead of overwriting it with an empty
   board. Drawing is blocked (`isHydrating`) until that read finishes: a draw
   computed from the pre-hydration board would overwrite the very history the
-  refresh is resuming. The read is also discarded once a write has been
+  refresh is resuming. Card generation is gated the same way - generating
+  pre-hydration would push the empty board and wipe the stored draw history.
+  The read is also discarded once a write has been
   *queued* - not merely completed - for the same reason. It is bounded by
   `hydrateTimeout` (5s) and always releases the host: an unreachable API has to
   degrade to local play, never lock the host out of their own game.
