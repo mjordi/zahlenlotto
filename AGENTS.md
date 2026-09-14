@@ -150,6 +150,19 @@ The cross-device sync uses a polling-based approach with Vercel KV:
   header. Card configuration is **merged**, so a plain draw update keeps the
   stored cards.
 
+**Write atomicity** (`commitState()`):
+- The sequence check and the write happen together. The in-memory store does
+  read-check-write in one synchronous block, which Node's single thread makes
+  indivisible.
+- On Vercel KV they are still two round trips, so a narrow window remains.
+  Reaching it needs two concurrent host writers, which the design rules out:
+  the host token lives in `sessionStorage` (per tab), so a session has exactly
+  one host tab, and that tab chains its writes.
+- **Known gap**: closing it completely needs a Lua compare-and-set via
+  `kv.eval()`, which cannot be verified without a live KV instance. Do not ship
+  one untested - a wrong script breaks the only production write path, which is
+  far worse than the race it closes.
+
 **Host authorization**:
 - The host generates a secret token (`generateHostToken()`) alongside the seed
   and keeps it in `sessionStorage` - it is **never** part of a shareable URL.
@@ -162,7 +175,17 @@ The cross-device sync uses a polling-based approach with Vercel KV:
 - Guests poll the server every 2 seconds for state changes
 - Hosts do **not** poll, but do read the stored state **once on mount**, so a
   refreshed host resumes the session instead of overwriting it with an empty
-  board. The read is discarded if the host has already written since mount.
+  board. Drawing is blocked (`isHydrating`) until that read finishes: a draw
+  computed from the pre-hydration board would overwrite the very history the
+  refresh is resuming. The read is also discarded once a write has been
+  *queued* - not merely completed - for the same reason.
+- The mount read honours a recorded reset: an empty state with `lastUpdate > 0`
+  invokes `onReset`, so a host reopening an older full share URL does not
+  resurrect the numbers that link still carries.
+- Any push response other than `2xx` or `409` sets `syncUnavailable`. `409` is
+  the expected "a newer write already won" answer and means sync is healthy;
+  everything else means guests have stopped receiving this host's draws, and
+  the host is told rather than left playing on unaware.
 - Host writes are **chained and sequenced**: each carries a strictly increasing
   `clientSeq` (clock-seeded so it keeps rising across a reload) and waits for
   the previous write. Two overlapping pushes - a slow draw and then a reset -

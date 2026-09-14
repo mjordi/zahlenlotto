@@ -45,6 +45,12 @@ interface UseGameSyncReturn {
     resetState: () => Promise<void>;
     /** True when the server cannot store session state (e.g. KV not configured). */
     syncUnavailable: boolean;
+    /**
+     * True while a host is reading the stored session on mount. Drawing has to
+     * wait for it: a draw computed from the pre-hydration board would overwrite
+     * the real history the refresh was meant to resume.
+     */
+    isHydrating: boolean;
 }
 
 /**
@@ -68,7 +74,11 @@ export function useGameSync({
     const lastCardConfigRef = useRef<string>(''); // Track card config changes
     const sessionSyncRef = useRef<SessionSync | null>(null);
     const hasHydratedRef = useRef(false);
+    // Set the moment a write is *queued*, not when it succeeds: the mount-time
+    // read must not be applied on top of a draw that is already on its way.
+    const hasLocalWriteRef = useRef(false);
     const [syncUnavailable, setSyncUnavailable] = useState(false);
+    const [isHydrating, setIsHydrating] = useState(isHost && enabled && !!seed);
 
     // Host writes are stamped with a strictly increasing sequence and chained,
     // so two overlapping pushes can never land out of order (see postState).
@@ -134,8 +144,13 @@ export function useGameSync({
      * it can never undo a draw the host just made.
      */
     useEffect(() => {
-        if (!seed || !enabled || !isHost || hasHydratedRef.current) return;
+        if (!seed || !enabled || !isHost) return;
+        if (hasHydratedRef.current) {
+            setIsHydrating(false);
+            return;
+        }
         hasHydratedRef.current = true;
+        setIsHydrating(true);
 
         let cancelled = false;
 
@@ -145,7 +160,10 @@ export function useGameSync({
                 if (!response.ok) return;
 
                 const state: GameState = await response.json();
-                if (cancelled || state.lastUpdate <= 0 || lastUpdateRef.current > 0) return;
+
+                // Never apply on top of a write we have already started - that
+                // draw was computed from the pre-hydration board.
+                if (cancelled || state.lastUpdate <= 0 || hasLocalWriteRef.current) return;
 
                 lastUpdateRef.current = state.lastUpdate;
                 // Keep our writes above anything the previous page load sent
@@ -153,7 +171,12 @@ export function useGameSync({
                     writeSeqRef.current = state.clientSeq;
                 }
 
-                if (state.drawnNumbers.length > 0) {
+                // An empty, timestamped state is a reset the host recorded
+                // earlier; resuming from a stale share URL must honour it
+                // rather than resurrect the numbers that link still carries.
+                if (state.drawnNumbers.length === 0) {
+                    onResetRef.current();
+                } else {
                     onStateUpdateRef.current(state.drawnNumbers, state.currentNumber);
                 }
 
@@ -168,6 +191,8 @@ export function useGameSync({
                 }
             } catch (error) {
                 console.error('Session hydrate error:', error);
+            } finally {
+                if (!cancelled) setIsHydrating(false);
             }
         })();
 
@@ -254,6 +279,10 @@ export function useGameSync({
 
         if (!currentSeed || !currentToken || !isHostRef.current) return;
 
+        // Claim the session locally before anything is awaited, so the
+        // mount-time read cannot be applied over a draw already in flight
+        hasLocalWriteRef.current = true;
+
         // Clock-seeded so it also keeps rising across a page reload
         writeSeqRef.current = Math.max(Date.now(), writeSeqRef.current + 1);
         const clientSeq = writeSeqRef.current;
@@ -269,19 +298,24 @@ export function useGameSync({
                     body: JSON.stringify({ ...body, clientSeq }),
                 });
 
-                if (response.status === 503) {
-                    setSyncUnavailable(true);
-                    return;
-                }
-
-                // 409 means the server already has a newer write; nothing to do
                 if (response.ok) {
                     const data = await response.json();
                     lastUpdateRef.current = data.lastUpdate;
                     setSyncUnavailable(false);
+                    return;
+                }
+
+                // 409 is the expected "a newer write already won" answer and
+                // means sync is healthy. Anything else (503, 500, 401, 403)
+                // means the guests are no longer receiving this host's draws,
+                // so say so rather than letting the host play on unaware.
+                if (response.status !== 409) {
+                    console.error('Sync push rejected:', response.status);
+                    setSyncUnavailable(true);
                 }
             } catch (error) {
                 console.error('Sync push error:', error);
+                setSyncUnavailable(true);
             }
         };
 
@@ -341,5 +375,6 @@ export function useGameSync({
         pushCardConfig,
         resetState,
         syncUnavailable,
+        isHydrating,
     };
 }

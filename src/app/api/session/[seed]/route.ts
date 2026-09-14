@@ -90,25 +90,97 @@ async function readState(
     return memoryStore.get(seed) ?? null;
 }
 
-async function writeState(
-    kvClient: Awaited<ReturnType<typeof getKV>>,
-    seed: string,
-    state: GameState
-): Promise<void> {
-    if (kvClient) {
-        await kvClient.set(`game:${seed}`, state, { ex: SESSION_TTL_SECONDS });
-        return;
-    }
-
-    memoryStore.set(seed, state);
-
-    // Prune expired entries from the development store
+/** Prune expired entries from the development store. */
+function pruneMemoryStore(): void {
     const cutoff = Date.now() - SESSION_TTL_SECONDS * 1000;
     for (const [key, value] of memoryStore.entries()) {
         if (value.lastUpdate < cutoff) {
             memoryStore.delete(key);
         }
     }
+}
+
+type CommitResult =
+    | { status: 'written'; state: GameState }
+    | { status: 'forbidden' }
+    | { status: 'stale'; current: GameState };
+
+/**
+ * Decides what a host write should do against the state already stored.
+ * Pure, so both storage backends apply exactly the same rules.
+ */
+function decideWrite(
+    existing: GameState | null,
+    incoming: Omit<GameState, 'hostToken'>,
+    hostToken: string
+): CommitResult {
+    // The first writer claims the session; later writes must match it
+    if (existing?.hostToken && existing.hostToken !== hostToken) {
+        return { status: 'forbidden' };
+    }
+
+    // Two host writes can overlap in flight (a slow draw, then a reset).
+    // Refuse the one that was already overtaken rather than letting it
+    // resurrect state the host has since replaced.
+    if (
+        incoming.clientSeq !== undefined &&
+        existing?.clientSeq !== undefined &&
+        incoming.clientSeq < existing.clientSeq
+    ) {
+        return { status: 'stale', current: existing };
+    }
+
+    return {
+        status: 'written',
+        state: {
+            ...incoming,
+            // Preserve card configuration unless this request supplies one
+            numberOfPlayers: incoming.numberOfPlayers ?? existing?.numberOfPlayers,
+            cardsPerPlayer: incoming.cardsPerPlayer ?? existing?.cardsPerPlayer,
+            playerNames: incoming.playerNames ?? existing?.playerNames,
+            clientSeq: incoming.clientSeq ?? existing?.clientSeq,
+            hostToken: existing?.hostToken ?? hostToken,
+        },
+    };
+}
+
+/**
+ * Applies a host write unless a newer one already landed.
+ *
+ * The check and the write belong together: two overlapping POSTs could
+ * otherwise both read the old sequence, both pass, and the older one land last.
+ * The in-memory store does all of it in one synchronous block, which Node's
+ * single thread makes indivisible.
+ *
+ * On Vercel KV the read and the write are still two round trips, so a narrow
+ * window remains there. It needs two concurrent host writers to be reachable,
+ * which the design already rules out: the host token lives in sessionStorage,
+ * which is per tab, so a session has exactly one host tab, and that tab chains
+ * its writes. Closing it completely needs a Lua compare-and-set (see AGENTS.md).
+ */
+async function commitState(
+    kvClient: Awaited<ReturnType<typeof getKV>>,
+    seed: string,
+    incoming: Omit<GameState, 'hostToken'>,
+    hostToken: string
+): Promise<CommitResult> {
+    if (kvClient) {
+        const existing = (await kvClient.get<GameState>(`game:${seed}`)) ?? null;
+        const result = decideWrite(existing, incoming, hostToken);
+        if (result.status === 'written') {
+            await kvClient.set(`game:${seed}`, result.state, { ex: SESSION_TTL_SECONDS });
+        }
+        return result;
+    }
+
+    // Single synchronous block - nothing can interleave between read and write
+    const existing = memoryStore.get(seed) ?? null;
+    const result = decideWrite(existing, incoming, hostToken);
+    if (result.status === 'written') {
+        memoryStore.set(seed, result.state);
+        pruneMemoryStore();
+    }
+    return result;
 }
 
 /** Strips server-only fields before sending state to a client. */
@@ -188,34 +260,11 @@ export async function POST(
         const store = await requireStore();
         if ('error' in store) return store.error;
 
-        const existing = await readState(store.kvClient, seed);
-
-        // The first writer claims the session; later writes must match it
-        if (existing?.hostToken && existing.hostToken !== hostToken) {
-            return NextResponse.json({ error: 'Not the session host' }, { status: 403 });
-        }
-
-        // Two host writes can overlap in flight (a slow draw, then a reset).
-        // Refuse the one that was already overtaken rather than letting it
-        // resurrect state the host has since replaced.
-        const clientSeq = typeof body.clientSeq === 'number' ? body.clientSeq : null;
-        if (clientSeq !== null && existing?.clientSeq !== undefined && clientSeq < existing.clientSeq) {
-            return NextResponse.json(
-                { error: 'Stale update', lastUpdate: existing.lastUpdate },
-                { status: 409 }
-            );
-        }
-
-        const state: GameState = {
+        const incoming: Omit<GameState, 'hostToken'> = {
             drawnNumbers: body.drawnNumbers,
             currentNumber: typeof body.currentNumber === 'number' ? body.currentNumber : null,
             lastUpdate: Date.now(),
-            clientSeq: clientSeq ?? existing?.clientSeq,
-            // Preserve card configuration unless this request supplies a new one
-            numberOfPlayers: existing?.numberOfPlayers,
-            cardsPerPlayer: existing?.cardsPerPlayer,
-            playerNames: existing?.playerNames,
-            hostToken: existing?.hostToken ?? hostToken,
+            clientSeq: typeof body.clientSeq === 'number' ? body.clientSeq : undefined,
         };
 
         if (
@@ -223,24 +272,34 @@ export async function POST(
             body.numberOfPlayers >= 1 &&
             body.numberOfPlayers <= 20
         ) {
-            state.numberOfPlayers = body.numberOfPlayers;
+            incoming.numberOfPlayers = body.numberOfPlayers;
         }
         if (
             typeof body.cardsPerPlayer === 'number' &&
             body.cardsPerPlayer >= 1 &&
             body.cardsPerPlayer <= 10
         ) {
-            state.cardsPerPlayer = body.cardsPerPlayer;
+            incoming.cardsPerPlayer = body.cardsPerPlayer;
         }
         if (Array.isArray(body.playerNames)) {
-            state.playerNames = body.playerNames
+            incoming.playerNames = body.playerNames
                 .filter((n: unknown) => typeof n === 'string')
                 .slice(0, 20);
         }
 
-        await writeState(store.kvClient, seed, state);
+        const result = await commitState(store.kvClient, seed, incoming, hostToken);
 
-        return NextResponse.json({ ok: true, lastUpdate: state.lastUpdate });
+        if (result.status === 'forbidden') {
+            return NextResponse.json({ error: 'Not the session host' }, { status: 403 });
+        }
+        if (result.status === 'stale') {
+            return NextResponse.json(
+                { error: 'Stale update', lastUpdate: result.current.lastUpdate },
+                { status: 409 }
+            );
+        }
+
+        return NextResponse.json({ ok: true, lastUpdate: result.state.lastUpdate });
     } catch (error) {
         console.error('POST session error:', error);
         return NextResponse.json({ error: 'Internal server error' }, { status: 500 });

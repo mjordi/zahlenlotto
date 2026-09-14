@@ -150,6 +150,43 @@ describe('useGameSync', () => {
             expect(posts).toHaveLength(0);
         });
 
+        it.each([500, 401, 403])(
+            'should report sync as unavailable on a %i response',
+            async (status) => {
+                fetchMock.mockImplementation(async (_url: string, init?: RequestInit) => {
+                    if (init?.method === 'POST') {
+                        return { ok: false, status, json: async () => ({ error: 'nope' }) };
+                    }
+                    return { ok: true, status: 200, json: async () => serverState };
+                });
+
+                const { result } = renderSync({ seed: 'seedA', hostToken: HOST_TOKEN });
+
+                await act(async () => {
+                    await result.current.pushState([1], 1);
+                });
+
+                expect(result.current.syncUnavailable).toBe(true);
+            }
+        );
+
+        it('should treat a 409 stale-write answer as healthy sync', async () => {
+            fetchMock.mockImplementation(async (_url: string, init?: RequestInit) => {
+                if (init?.method === 'POST') {
+                    return { ok: false, status: 409, json: async () => ({ error: 'Stale update' }) };
+                }
+                return { ok: true, status: 200, json: async () => serverState };
+            });
+
+            const { result } = renderSync({ seed: 'seedA', hostToken: HOST_TOKEN });
+
+            await act(async () => {
+                await result.current.pushState([1], 1);
+            });
+
+            expect(result.current.syncUnavailable).toBe(false);
+        });
+
         it('should report sync as unavailable when the server has no storage', async () => {
             fetchMock.mockImplementation(async () => ({
                 ok: false,
@@ -301,6 +338,53 @@ describe('useGameSync', () => {
             const { callbacks } = renderSync({ seed: 'seedA', hostToken: HOST_TOKEN, isHost: true });
 
             await waitFor(() => expect(fetchMock).toHaveBeenCalled());
+
+            expect(callbacks.onStateUpdate).not.toHaveBeenCalled();
+            expect(callbacks.onReset).not.toHaveBeenCalled();
+        });
+
+        it('should apply a recorded reset instead of stale share-URL numbers', async () => {
+            // Host reopens an old full share link after the session was reset:
+            // the server's empty-but-timestamped state must win.
+            serverState = { drawnNumbers: [], currentNumber: null, lastUpdate: 5000 };
+
+            const { callbacks } = renderSync({ seed: 'seedA', hostToken: HOST_TOKEN, isHost: true });
+
+            await waitFor(() => {
+                expect(callbacks.onReset).toHaveBeenCalled();
+            });
+            expect(callbacks.onStateUpdate).not.toHaveBeenCalled();
+        });
+
+        it('should not apply the read once a draw has been queued, even before it responds', async () => {
+            serverState = { drawnNumbers: [1, 2], currentNumber: 2, lastUpdate: 1000 };
+
+            // Hold both the read and the write open, then let the read answer
+            // first: the POST has been queued but has not come back yet.
+            let releaseRead: (() => void) | undefined;
+            let releaseWrite: (() => void) | undefined;
+            const original = fetchMock.getMockImplementation()!;
+            fetchMock.mockImplementation(async (url: string, init?: RequestInit) => {
+                if (init?.method === 'POST') {
+                    await new Promise<void>(resolve => { releaseWrite = resolve; });
+                } else {
+                    await new Promise<void>(resolve => { releaseRead = resolve; });
+                }
+                return original(url, init);
+            });
+
+            const { result, callbacks } = renderSync({ seed: 'seedA', hostToken: HOST_TOKEN, isHost: true });
+
+            await act(async () => {
+                const push = result.current.pushState([9], 9);
+                await new Promise(resolve => setTimeout(resolve, 10));
+
+                releaseRead?.();
+                await new Promise(resolve => setTimeout(resolve, 10));
+
+                releaseWrite?.();
+                await push;
+            });
 
             expect(callbacks.onStateUpdate).not.toHaveBeenCalled();
             expect(callbacks.onReset).not.toHaveBeenCalled();

@@ -16,15 +16,21 @@ jest.mock('@/utils/pdfGenerator', () => ({ generatePdf: jest.fn() }));
 
 // The hook is exercised directly in src/hooks/__tests__/useGameSync.test.ts;
 // here it is stubbed so the component can be driven through its props.
+let syncState = { syncUnavailable: false, isHydrating: false };
+
 jest.mock('@/hooks/useGameSync', () => ({
     useGameSync: () => ({
         claimSession: jest.fn(),
         pushState: jest.fn(),
         pushCardConfig: jest.fn(),
         resetState: jest.fn(),
-        syncUnavailable: false,
+        ...syncState,
     }),
 }));
+
+beforeEach(() => {
+    syncState = { syncUnavailable: false, isHydrating: false };
+});
 
 /** A card whose first row completes exactly on 1, 11, 21, 31, 41. */
 function makeCard(id: number, playerName: string): Card {
@@ -117,6 +123,17 @@ describe('NumberDrawer', () => {
             renderDrawer({ sessionData: SESSION, joinedFromUrl: false, generatedCards: [] });
 
             expect(screen.getByRole('button', { name: /Spiel teilen/i })).toBeEnabled();
+        });
+
+        it('should hold drawing until a resuming host has read the stored session', () => {
+            // Drawing off the pre-hydration board would overwrite the very
+            // history the refresh is resuming.
+            syncState = { syncUnavailable: false, isHydrating: true };
+
+            renderDrawer({ sessionData: SESSION, joinedFromUrl: false });
+
+            expect(screen.getByRole('button', { name: /Zahl ziehen/i })).toBeDisabled();
+            expect(screen.getByRole('button', { name: /Neu starten/i })).toBeDisabled();
         });
 
         it('should keep draw and restart enabled for a host', () => {
