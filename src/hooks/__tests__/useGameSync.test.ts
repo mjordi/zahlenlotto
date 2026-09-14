@@ -22,23 +22,30 @@ let fetchMock: jest.Mock;
 
 /** Latest state the fake server would return from GET. */
 let serverState: PolledState;
-/** Every POST body the hook sent, with its headers. */
+/** State-writing POSTs the hook sent, with their headers. */
 let posts: { seed: string; body: Record<string, unknown>; token: string | null }[];
+/** Ownership-rotation POSTs, kept apart so state assertions stay readable. */
+let rotations: { seed: string; body: Record<string, unknown>; token: string | null }[];
 
 beforeEach(() => {
     serverState = { drawnNumbers: [], currentNumber: null, lastUpdate: 0 };
     posts = [];
+    rotations = [];
 
     fetchMock = jest.fn(async (url: string, init?: RequestInit) => {
         const seed = url.replace('/api/session/', '');
 
         if (init?.method === 'POST') {
             const headers = (init.headers ?? {}) as Record<string, string>;
-            posts.push({
-                seed,
-                body: JSON.parse(init.body as string),
-                token: headers['x-host-token'] ?? null,
-            });
+            const body = JSON.parse(init.body as string);
+            const entry = { seed, body, token: headers['x-host-token'] ?? null };
+
+            if (body.rotateToken !== undefined) {
+                rotations.push(entry);
+                return { ok: true, status: 200, json: async () => ({ ok: true, rotated: true }) };
+            }
+
+            posts.push(entry);
             return {
                 ok: true,
                 status: 200,
@@ -61,6 +68,8 @@ function renderSync(overrides: Partial<Parameters<typeof useGameSync>[0]> = {}) 
         onStateUpdate: jest.fn(),
         onCardConfigUpdate: jest.fn(),
         onReset: jest.fn(),
+        onTokenRotated: jest.fn(),
+        onHostRoleLost: jest.fn(),
     };
 
     const utils = renderHook(() =>
@@ -150,7 +159,7 @@ describe('useGameSync', () => {
             expect(posts).toHaveLength(0);
         });
 
-        it.each([500, 401, 403])(
+        it.each([500, 401])(
             'should report sync as unavailable on a %i response',
             async (status) => {
                 fetchMock.mockImplementation(async (_url: string, init?: RequestInit) => {
@@ -201,6 +210,78 @@ describe('useGameSync', () => {
             });
 
             expect(result.current.syncUnavailable).toBe(true);
+        });
+    });
+
+    describe('taking over the session on load', () => {
+        it('should rotate the token on mount and use the new one for writes', async () => {
+            const { result, callbacks } = renderSync({ seed: 'seedA', hostToken: HOST_TOKEN, isHost: true });
+
+            await waitFor(() => expect(rotations).toHaveLength(1));
+
+            expect(rotations[0].token).toBe(HOST_TOKEN);
+            const nextToken = rotations[0].body.rotateToken as string;
+            expect(nextToken).not.toBe(HOST_TOKEN);
+            expect(callbacks.onTokenRotated).toHaveBeenCalledWith(nextToken);
+
+            await act(async () => {
+                await result.current.pushState([7], 7);
+            });
+
+            expect(posts.at(-1)?.token).toBe(nextToken);
+        });
+
+        it('should not rotate when there is no session yet', async () => {
+            renderSync({ seed: null, hostToken: null });
+
+            await new Promise(resolve => setTimeout(resolve, 40));
+
+            expect(rotations).toHaveLength(0);
+        });
+
+        it('should not rotate as a guest', async () => {
+            renderSync({ seed: 'seedA', hostToken: null, isHost: false });
+
+            await new Promise(resolve => setTimeout(resolve, 40));
+
+            expect(rotations).toHaveLength(0);
+        });
+
+        it('should step down when another tab already took the session over', async () => {
+            fetchMock.mockImplementation(async (_url: string, init?: RequestInit) => {
+                if (init?.method === 'POST') {
+                    return { ok: false, status: 403, json: async () => ({ error: 'Not the session host' }) };
+                }
+                return { ok: true, status: 200, json: async () => serverState };
+            });
+
+            const { callbacks } = renderSync({ seed: 'seedA', hostToken: HOST_TOKEN, isHost: true });
+
+            await waitFor(() => expect(callbacks.onHostRoleLost).toHaveBeenCalled());
+        });
+
+        it('should step down when a later write is refused', async () => {
+            let refuse = false;
+            const original = fetchMock.getMockImplementation()!;
+            fetchMock.mockImplementation(async (url: string, init?: RequestInit) => {
+                const body = init?.body ? JSON.parse(init.body as string) : {};
+                if (refuse && init?.method === 'POST' && body.rotateToken === undefined) {
+                    return { ok: false, status: 403, json: async () => ({ error: 'Not the session host' }) };
+                }
+                return original(url, init);
+            });
+
+            const { result, callbacks } = renderSync({ seed: 'seedA', hostToken: HOST_TOKEN, isHost: true });
+            await waitFor(() => expect(rotations).toHaveLength(1));
+
+            refuse = true;
+            await act(async () => {
+                await result.current.pushState([3], 3);
+            });
+
+            expect(callbacks.onHostRoleLost).toHaveBeenCalled();
+            // A takeover is not a sync outage - do not show the generic warning
+            expect(result.current.syncUnavailable).toBe(false);
         });
     });
 
@@ -511,7 +592,11 @@ describe('useGameSync', () => {
             let postCount = 0;
 
             fetchMock.mockImplementation(async (url: string, init?: RequestInit) => {
-                if (init?.method === 'POST' && ++postCount === 1) {
+                // Only stall the first *state* write; rotation POSTs pass through
+                const isStateWrite =
+                    init?.method === 'POST' &&
+                    JSON.parse((init.body as string) ?? '{}').rotateToken === undefined;
+                if (isStateWrite && ++postCount === 1) {
                     await new Promise<void>(resolve => { releaseFirst = resolve; });
                 }
                 return original(url, init);

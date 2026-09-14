@@ -75,12 +75,27 @@ export default function NumberDrawer({
     // Secret that proves session ownership to the API. Hosts only - never shared.
     const [hostToken, setHostToken] = useState<string | null>(null);
 
+    // Set when another tab rotated the token out from under us
+    const [hostTakenOver, setHostTakenOver] = useState(false);
+
     // Sync isHost with joinedFromUrl prop (handles async URL detection)
     useEffect(() => {
         if (joinedFromUrl) {
             setIsHost(false);
         }
     }, [joinedFromUrl]);
+
+    // A returning host keeps its token in sessionStorage. Adopt it as soon as
+    // the role is known so the sync hook can rotate it on mount, before any
+    // other tab holding the same copied token gets to write.
+    useEffect(() => {
+        if (!sessionResolved || !isHost || hostToken) return;
+        const seed = sessionData?.seed;
+        if (!seed) return;
+
+        const stored = getHostToken(seed);
+        if (stored) setHostToken(stored);
+    }, [sessionResolved, isHost, hostToken, sessionData]);
 
     // Generate cards from config (used by both host and when receiving sync)
     const generateCardsFromConfig = useCallback((
@@ -137,6 +152,17 @@ export default function NumberDrawer({
             setDrawnNumbers([]);
             setCurrentNumber(null);
         }, [setDrawnNumbers, setCurrentNumber]),
+        onTokenRotated: useCallback((token: string) => {
+            const seed = sessionData?.seed;
+            if (seed) storeHostToken(seed, token);
+            setHostToken(token);
+        }, [sessionData]),
+        onHostRoleLost: useCallback(() => {
+            // Another tab owns the session now; carry on as a spectator
+            setIsHost(false);
+            setHostToken(null);
+            setHostTakenOver(true);
+        }, []),
     });
 
     /**
@@ -534,6 +560,20 @@ export default function NumberDrawer({
                             <line x1="12" y1="17" x2="12.01" y2="17"></line>
                         </svg>
                         <span className="text-sm font-medium">{t.syncUnavailable}</span>
+                    </div>
+                )}
+
+                {/* Another tab took the session over */}
+                {hostTakenOver && (
+                    <div
+                        className="mb-4 inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-amber-500/20 text-amber-300 border border-amber-500/30"
+                        role="status"
+                    >
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                            <rect x="2" y="7" width="20" height="14" rx="2"></rect>
+                            <polyline points="16 3 12 7 8 3"></polyline>
+                        </svg>
+                        <span className="text-sm font-medium">{t.hostTakenOver}</span>
                     </div>
                 )}
 

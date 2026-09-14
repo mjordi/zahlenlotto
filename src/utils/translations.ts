@@ -93,6 +93,8 @@ export interface Translations {
     hostOnly: string;
     waitingForCards: string;
     syncUnavailable: string;
+    hostTakenOver: string;
+
     // Empty state
     emptyStateHint: string;
 
@@ -191,6 +193,7 @@ export const translations: Record<Language, Translations> = {
         hostOnly: 'Nur der Gastgeber kann Zahlen ziehen',
         waitingForCards: 'Warten auf Karten vom Gastgeber...',
         syncUnavailable: 'Synchronisierung nicht verfügbar - andere Geräte sehen diese Ziehung nicht.',
+        hostTakenOver: 'Ein anderer Tab leitet dieses Spiel jetzt - dieser Tab schaut nur noch zu.',
         // Empty state
         emptyStateHint: 'Space drücken oder klicken zum Ziehen',
 
@@ -288,6 +291,7 @@ export const translations: Record<Language, Translations> = {
         hostOnly: 'Only the host can draw numbers',
         waitingForCards: 'Waiting for cards from host...',
         syncUnavailable: 'Sync unavailable - other devices will not see this draw.',
+        hostTakenOver: 'Another tab is hosting this game now - this tab is watching only.',
         // Empty state
         emptyStateHint: 'Press Space or click to draw',
 
@@ -385,6 +389,7 @@ export const translations: Record<Language, Translations> = {
         hostOnly: "Seul l'hôte peut tirer les numéros",
         waitingForCards: "En attente des cartes de l'hôte...",
         syncUnavailable: "Synchronisation indisponible - les autres appareils ne verront pas ce tirage.",
+        hostTakenOver: "Un autre onglet anime cette partie - cet onglet est spectateur.",
         // Empty state
         emptyStateHint: 'Appuyez sur Espace ou cliquez pour tirer',
 
@@ -482,6 +487,7 @@ export const translations: Record<Language, Translations> = {
         hostOnly: "Solo l'host può estrarre numeri",
         waitingForCards: "In attesa delle cartelle dall'host...",
         syncUnavailable: "Sincronizzazione non disponibile - gli altri dispositivi non vedranno questa estrazione.",
+        hostTakenOver: "Un'altra scheda ora conduce la partita - questa scheda è spettatrice.",
         // Empty state
         emptyStateHint: 'Premi Spazio o clicca per estrarre',
 

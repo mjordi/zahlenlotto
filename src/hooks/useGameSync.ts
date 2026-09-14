@@ -5,7 +5,7 @@
  */
 
 import { useEffect, useRef, useCallback, useState } from 'react';
-import { SessionSync } from '@/utils/session';
+import { SessionSync, generateHostToken } from '@/utils/session';
 
 export interface CardConfig {
     numberOfPlayers: number;
@@ -33,6 +33,10 @@ interface UseGameSyncOptions {
     onStateUpdate: (drawnNumbers: number[], currentNumber: number | null) => void;
     onCardConfigUpdate: (config: CardConfig) => void;
     onReset: () => void;
+    /** Called with the replacement token after this tab takes over the session. */
+    onTokenRotated: (token: string) => void;
+    /** Called when the server no longer recognises us as host (another tab took over). */
+    onHostRoleLost: () => void;
 }
 
 interface UseGameSyncReturn {
@@ -71,6 +75,8 @@ export function useGameSync({
     onStateUpdate,
     onCardConfigUpdate,
     onReset,
+    onTokenRotated,
+    onHostRoleLost,
 }: UseGameSyncOptions): UseGameSyncReturn {
     const lastUpdateRef = useRef<number>(0);
     const lastCardConfigRef = useRef<string>(''); // Track card config changes
@@ -99,6 +105,8 @@ export function useGameSync({
     const onStateUpdateRef = useRef(onStateUpdate);
     const onCardConfigUpdateRef = useRef(onCardConfigUpdate);
     const onResetRef = useRef(onReset);
+    const onTokenRotatedRef = useRef(onTokenRotated);
+    const onHostRoleLostRef = useRef(onHostRoleLost);
 
     useEffect(() => {
         seedRef.current = seed;
@@ -107,7 +115,9 @@ export function useGameSync({
         onStateUpdateRef.current = onStateUpdate;
         onCardConfigUpdateRef.current = onCardConfigUpdate;
         onResetRef.current = onReset;
-    }, [seed, hostToken, isHost, onStateUpdate, onCardConfigUpdate, onReset]);
+        onTokenRotatedRef.current = onTokenRotated;
+        onHostRoleLostRef.current = onHostRoleLost;
+    }, [seed, hostToken, isHost, onStateUpdate, onCardConfigUpdate, onReset, onTokenRotated, onHostRoleLost]);
 
     const claimSession = useCallback((newSeed: string, newHostToken: string) => {
         seedRef.current = newSeed;
@@ -164,6 +174,36 @@ export function useGameSync({
 
         (async () => {
             try {
+                // Take ownership first. Duplicating a tab copies sessionStorage,
+                // so the clone arrives holding the same token; whichever tab
+                // loaded last rotates the token and the other is locked out on
+                // its next write rather than both writing as host.
+                const currentToken = hostTokenRef.current;
+                if (currentToken) {
+                    const nextToken = generateHostToken();
+                    const rotation = await fetch(`/api/session/${seed}`, {
+                        method: 'POST',
+                        signal: controller.signal,
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'x-host-token': currentToken,
+                        },
+                        body: JSON.stringify({ rotateToken: nextToken }),
+                    });
+
+                    if (cancelled) return;
+
+                    if (rotation.status === 403) {
+                        // Another tab already took the session over
+                        onHostRoleLostRef.current();
+                        return;
+                    }
+                    if (rotation.ok) {
+                        hostTokenRef.current = nextToken;
+                        onTokenRotatedRef.current(nextToken);
+                    }
+                }
+
                 const response = await fetch(`/api/session/${seed}`, { signal: controller.signal });
                 if (!response.ok) return;
 
@@ -320,10 +360,17 @@ export function useGameSync({
                     return;
                 }
 
+                // 403 means another tab rotated the token and owns the session
+                // now; step down instead of showing a generic sync warning.
+                if (response.status === 403) {
+                    onHostRoleLostRef.current();
+                    return;
+                }
+
                 // 409 is the expected "a newer write already won" answer and
-                // means sync is healthy. Anything else (503, 500, 401, 403)
-                // means the guests are no longer receiving this host's draws,
-                // so say so rather than letting the host play on unaware.
+                // means sync is healthy. Anything else (503, 500, 401) means
+                // the guests are no longer receiving this host's draws, so say
+                // so rather than letting the host play on unaware.
                 if (response.status !== 409) {
                     console.error('Sync push rejected:', response.status);
                     setSyncUnavailable(true);

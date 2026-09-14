@@ -160,11 +160,12 @@ The cross-device sync uses a polling-based approach with Vercel KV:
   read-check-write in one synchronous block, which Node's single thread makes
   indivisible.
 - On Vercel KV they are still two round trips, so a window remains. A single
-  host tab cannot hit it (it chains its writes), but **two host tabs can**:
+  host tab cannot hit it, because it chains its writes. Two host tabs could:
   duplicating a tab, or opening a link from it, copies `sessionStorage` in
-  Chrome and Firefox, so the clone reads the same host token and also
-  classifies itself as host. Do not rely on "one host tab per session" - that
-  premise is false.
+  Chrome and Firefox, so the clone arrives holding the same host token. **Token
+  rotation on load** (below) is what stops them writing concurrently - not any
+  property of `sessionStorage`, which is not per-tab in the way it first
+  appears.
 - **Known gap**: closing it completely needs a Lua compare-and-set via
   `kv.eval()`, which cannot be verified without a live KV instance. Do not ship
   one untested - a wrong script breaks the only production write path, which is
@@ -176,6 +177,19 @@ The cross-device sync uses a polling-based approach with Vercel KV:
 - The first `POST` for a seed claims the session with that token; later writes
   must present the same token or get a `403`.
 - Client-side guest restrictions are UX only - the token is the actual boundary.
+
+**Token rotation on load** (`rotateHostToken()`):
+- On mount a host re-claims its session with a freshly minted token, presenting
+  the current one as proof. The newest tab to load owns the session.
+- This is what makes concurrent hosts impossible. Duplicating a tab copies
+  `sessionStorage`, so the clone holds the same token; it rotates on load and
+  the original is refused with `403` on its next write, stepping down to
+  spectator (`onHostRoleLost`) with the `hostTakenOver` notice rather than a
+  generic sync warning.
+- A rotation carries no state and deliberately leaves `lastUpdate` alone, so
+  guests never observe it.
+- Rotation is authenticated by the token in force: holding the share link is
+  never enough to seize a session.
 
 **useGameSync Hook** (`src/hooks/useGameSync.ts`):
 - Hosts push state updates to the server after each draw

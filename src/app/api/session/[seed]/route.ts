@@ -183,6 +183,48 @@ async function commitState(
     return result;
 }
 
+/**
+ * Hands ownership of a session to a freshly minted host token.
+ *
+ * Authenticated by the token currently in force, so holding the share link is
+ * never enough to seize a session. Deliberately leaves `lastUpdate` alone: a
+ * rotation is invisible to guests, who must not see it as a state change.
+ *
+ * Returns 'written' when the session was unclaimed - there is nothing to take
+ * over, and the caller's next write will claim it.
+ */
+async function rotateHostToken(
+    kvClient: Awaited<ReturnType<typeof getKV>>,
+    seed: string,
+    currentToken: string,
+    nextToken: string
+): Promise<CommitResult> {
+    const apply = (existing: GameState | null): CommitResult => {
+        if (!existing) return { status: 'written', state: EMPTY_STATE };
+        if (existing.hostToken && existing.hostToken !== currentToken) {
+            return { status: 'forbidden' };
+        }
+        return { status: 'written', state: { ...existing, hostToken: nextToken } };
+    };
+
+    if (kvClient) {
+        const existing = (await kvClient.get<GameState>(`game:${seed}`)) ?? null;
+        const result = apply(existing);
+        if (result.status === 'written' && existing) {
+            await kvClient.set(`game:${seed}`, result.state, { ex: SESSION_TTL_SECONDS });
+        }
+        return result;
+    }
+
+    // Single synchronous block - nothing can interleave between read and write
+    const existing = memoryStore.get(seed) ?? null;
+    const result = apply(existing);
+    if (result.status === 'written' && existing) {
+        memoryStore.set(seed, result.state);
+    }
+    return result;
+}
+
 /** Strips server-only fields before sending state to a client. */
 function toPublicState(state: GameState): Omit<GameState, 'hostToken'> {
     return {
@@ -245,6 +287,29 @@ export async function POST(
         }
 
         const body = await request.json();
+
+        // Ownership handover: the newest tab to load takes the session, so a
+        // tab that cloned the token (duplicating a tab copies sessionStorage)
+        // cannot keep writing alongside it. Carries no state of its own.
+        if (body.rotateToken !== undefined) {
+            if (
+                typeof body.rotateToken !== 'string' ||
+                body.rotateToken.length < MIN_HOST_TOKEN_LENGTH ||
+                body.rotateToken === hostToken
+            ) {
+                return NextResponse.json({ error: 'Invalid rotation token' }, { status: 400 });
+            }
+
+            const store = await requireStore();
+            if ('error' in store) return store.error;
+
+            const rotated = await rotateHostToken(store.kvClient, seed, hostToken, body.rotateToken);
+            if (rotated.status === 'forbidden') {
+                return NextResponse.json({ error: 'Not the session host' }, { status: 403 });
+            }
+
+            return NextResponse.json({ ok: true, rotated: true });
+        }
 
         if (!Array.isArray(body.drawnNumbers)) {
             return NextResponse.json({ error: 'Invalid request body' }, { status: 400 });

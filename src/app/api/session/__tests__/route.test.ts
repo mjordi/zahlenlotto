@@ -182,6 +182,112 @@ describe('Session API Route', () => {
         });
     });
 
+    describe('Host token rotation', () => {
+        const NEXT_TOKEN = 'rotated-token-for-tests-01234567';
+
+        it('should hand ownership to the rotated token', async () => {
+            const seed = 'rotateSeed1';
+
+            await POST(hostRequest({ drawnNumbers: [4], currentNumber: 4 }) as never, createParams(seed));
+
+            const rotate = await POST(
+                hostRequest({ rotateToken: NEXT_TOKEN }) as never,
+                createParams(seed)
+            );
+            expect(rotate.status).toBe(200);
+            expect((await rotate.json()).rotated).toBe(true);
+
+            // The old token is no longer the host
+            const stale = await POST(
+                hostRequest({ drawnNumbers: [4, 5], currentNumber: 5 }) as never,
+                createParams(seed)
+            );
+            expect(stale.status).toBe(403);
+
+            // The new one is
+            const fresh = await POST(
+                hostRequest({ drawnNumbers: [4, 6], currentNumber: 6 }, NEXT_TOKEN) as never,
+                createParams(seed)
+            );
+            expect(fresh.status).toBe(200);
+        });
+
+        it('should leave the game state and its timestamp untouched', async () => {
+            const seed = 'rotateSeed2';
+
+            await POST(
+                hostRequest({
+                    drawnNumbers: [1, 2],
+                    currentNumber: 2,
+                    numberOfPlayers: 2,
+                    cardsPerPlayer: 3,
+                    playerNames: ['Alice', 'Bob'],
+                }) as never,
+                createParams(seed)
+            );
+            const before = await getState(seed);
+
+            await POST(hostRequest({ rotateToken: NEXT_TOKEN }) as never, createParams(seed));
+
+            // A rotation must be invisible to guests, so nothing may change
+            expect(await getState(seed)).toEqual(before);
+        });
+
+        it('should refuse rotation from a token that is not the host', async () => {
+            const seed = 'rotateSeed3';
+
+            await POST(hostRequest({ drawnNumbers: [9], currentNumber: 9 }) as never, createParams(seed));
+
+            const forged = await POST(
+                hostRequest({ rotateToken: NEXT_TOKEN }, OTHER_TOKEN) as never,
+                createParams(seed)
+            );
+
+            expect(forged.status).toBe(403);
+
+            // The real host still owns it
+            const ours = await POST(
+                hostRequest({ drawnNumbers: [9, 10], currentNumber: 10 }) as never,
+                createParams(seed)
+            );
+            expect(ours.status).toBe(200);
+        });
+
+        it('should accept rotation on a session nobody has claimed', async () => {
+            const response = await POST(
+                hostRequest({ rotateToken: NEXT_TOKEN }) as never,
+                createParams('rotateSeedUnclaimed')
+            );
+
+            expect(response.status).toBe(200);
+        });
+
+        it('should reject a rotation token that is too short or unchanged', async () => {
+            const seed = 'rotateSeed4';
+
+            const short = await POST(
+                hostRequest({ rotateToken: 'tiny' }) as never,
+                createParams(seed)
+            );
+            expect(short.status).toBe(400);
+
+            const same = await POST(
+                hostRequest({ rotateToken: HOST_TOKEN }) as never,
+                createParams(seed)
+            );
+            expect(same.status).toBe(400);
+        });
+
+        it('should still require a host token to rotate', async () => {
+            const response = await POST(
+                createMockRequest({ rotateToken: NEXT_TOKEN }) as never,
+                createParams('rotateSeed5')
+            );
+
+            expect(response.status).toBe(401);
+        });
+    });
+
     describe('Card configuration sync', () => {
         it('should save and return card configuration', async () => {
             const seed = 'cardConfig123';
