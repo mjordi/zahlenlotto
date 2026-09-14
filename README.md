@@ -127,7 +127,7 @@ zahlenlotto/
 ├── src/
 │   ├── app/              # Next.js App Router
 │   │   ├── api/          # API routes
-│   │   │   └── session/  # Session sync API (GET/POST/DELETE)
+│   │   │   └── session/  # Session sync API (GET poll, POST host update)
 │   │   ├── page.tsx      # Main page with state management
 │   │   ├── layout.tsx    # Root layout
 │   │   └── globals.css   # Global styles

@@ -62,6 +62,8 @@ export default function NumberDrawer({
     const [celebratingPlayers, setCelebratingPlayers] = useState<string[]>([]);
     const [newlyCompletedRowsByCard, setNewlyCompletedRowsByCard] = useState<Map<number, number[]>>(new Map());
     const [linkCopied, setLinkCopied] = useState(false);
+    const [showAllDrawn, setShowAllDrawn] = useState(false);
+    const [showPdfDrawer, setShowPdfDrawer] = useState(false);
 
     // Track if we are the host (who started the session)
     const [isHost, setIsHost] = useState(!joinedFromUrl);
@@ -149,8 +151,6 @@ export default function NumberDrawer({
 
         return { seed, isNew: !existingSeed };
     }, [sessionData, hostToken, claimSession]);
-    const [showAllDrawn, setShowAllDrawn] = useState(false);
-    const [showPdfDrawer, setShowPdfDrawer] = useState(false);
 
     // Audio Context initialisieren
     const initAudio = useCallback(() => {
