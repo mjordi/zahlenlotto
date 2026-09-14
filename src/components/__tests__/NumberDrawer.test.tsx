@@ -98,6 +98,19 @@ describe('NumberDrawer', () => {
             expect(screen.getByText(/Warten auf Karten/i)).toBeInTheDocument();
         });
 
+        it('should not tell a guest to press Space or click to draw', () => {
+            renderDrawer({ sessionData: SESSION, joinedFromUrl: true });
+
+            expect(screen.getByText(/Noch keine Zahl gezogen/i)).toBeInTheDocument();
+            expect(screen.queryByText(/Space drücken oder klicken/i)).not.toBeInTheDocument();
+        });
+
+        it('should show the draw hint to a host', () => {
+            renderDrawer({ sessionData: SESSION, joinedFromUrl: false });
+
+            expect(screen.getByText(/Space drücken oder klicken/i)).toBeInTheDocument();
+        });
+
         it('should keep draw and restart enabled for a host', () => {
             renderDrawer({ sessionData: SESSION, joinedFromUrl: false });
 

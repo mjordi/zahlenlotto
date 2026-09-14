@@ -149,6 +149,8 @@ export default function NumberDrawer({
 
         return { seed, isNew: !existingSeed };
     }, [sessionData, hostToken, claimSession]);
+    const [showAllDrawn, setShowAllDrawn] = useState(false);
+    const [showPdfDrawer, setShowPdfDrawer] = useState(false);
 
     // Audio Context initialisieren
     const initAudio = useCallback(() => {
@@ -253,11 +255,11 @@ export default function NumberDrawer({
             playCelebrationSound();
             triggerConfetti();
 
-            // Hide celebration after 5 seconds
+            // Hide celebration after 3 seconds (also dismissible by click)
             setTimeout(() => {
                 setShowCelebration(false);
                 setCelebratingPlayers([]);
-            }, 5000);
+            }, 3000);
         }
 
         previousDrawnRef.current = newDrawnNumbers;
@@ -462,25 +464,36 @@ export default function NumberDrawer({
             {/* Aktuelle Ziehung */}
             <div className="glass-panel p-6 md:p-8 text-center relative overflow-hidden">
                 <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-blue-500/50 to-transparent"></div>
-                <h2 className="text-2xl font-bold mb-6 bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-amber-400">{t.currentDrawing}</h2>
+                <h2 className="font-display text-2xl font-bold mb-6 bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-amber-400">{t.currentDrawing}</h2>
 
                 {/* Große aktuelle Zahl */}
                 <div className={`
-          w-[140px] h-[140px] mx-auto rounded-full flex items-center justify-center
-          font-bold shadow-2xl transition-all duration-500 border-4
-          ${isAnimating ? 'animate-pulse scale-110' : ''}
+          w-[160px] h-[160px] mx-auto rounded-full flex items-center justify-center
+          font-display font-bold transition-all duration-500 border-4 relative
+          ${isAnimating ? 'number-ball-spin' : ''}
           ${currentNumber !== null
-                        ? 'bg-gradient-to-br from-amber-400 to-amber-600 text-white text-6xl border-amber-300/50 shadow-amber-500/40'
-                        : 'bg-slate-800/50 text-slate-600 text-2xl border-slate-700/50'
+                        ? `bg-gradient-to-br from-amber-400 via-amber-500 to-amber-700 text-white text-7xl border-amber-300/50 number-ball ${justDrawn !== null ? 'number-ball-reveal' : ''}`
+                        : 'bg-gradient-to-br from-slate-700/50 to-slate-800/50 text-slate-500 text-3xl border-slate-600/30 number-ball-empty empty-ball-pulse'
                     }
         `}>
-                    {currentNumber !== null ? currentNumber : '?'}
+                    {currentNumber !== null && (
+                        <div className="absolute inset-0 rounded-full overflow-hidden pointer-events-none">
+                            <div className="absolute inset-x-0 top-0 h-[45%] bg-gradient-to-b from-white/25 to-transparent" />
+                        </div>
+                    )}
+                    <span className="relative z-10 drop-shadow-lg">{currentNumber !== null ? currentNumber : '?'}</span>
                 </div>
 
                 {/* Ziehungszähler */}
                 <div className="mt-4 font-medium" style={{ color: 'var(--text-muted)' }}>
                     {drawnNumbers.length === 0
-                        ? t.noNumberDrawn
+                        ? (
+                            <span className="flex flex-col items-center gap-1">
+                                <span>{t.noNumberDrawn}</span>
+                                {/* Guests can neither press Space nor click to draw */}
+                                {isHost && <span className="text-xs opacity-70">{t.emptyStateHint}</span>}
+                            </span>
+                        )
                         : drawnNumbers.length === TOTAL_NUMBERS
                             ? t.allDrawn
                             : `${drawnNumbers.length}${t.nthDrawing}`
@@ -526,7 +539,7 @@ export default function NumberDrawer({
                     <button
                         onClick={reset}
                         disabled={!isHost}
-                        className="px-8 py-4 bg-red-600 hover:bg-red-500 text-white font-semibold rounded-xl transition-all duration-300 shadow-lg shadow-red-500/20 hover:shadow-red-500/40 active:scale-95 border border-white/10 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-red-600"
+                        className="btn-danger px-8 py-4 text-lg disabled:opacity-50 disabled:cursor-not-allowed"
                         title={!isHost ? t.hostOnly : undefined}
                     >
                         {t.restart}
@@ -566,36 +579,52 @@ export default function NumberDrawer({
             {/* Two Column Layout: Numbers Overview and Playing Cards */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 {/* Zahlenübersicht */}
-                <div className="glass-panel p-6 md:p-8">
-                    <h2 className="text-center text-2xl font-bold mb-6 bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-amber-400">
+                <div className="glass-panel p-6 md:p-8 relative overflow-hidden">
+                    <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-emerald-500/50 to-transparent"></div>
+                    <h2 className="text-center font-display text-2xl font-bold mb-6 bg-clip-text text-transparent bg-gradient-to-r from-emerald-400 to-blue-400">
                         {t.allNumbersOverview}
                     </h2>
 
-                    {/* Zahlen Grid */}
-                    <div className="grid grid-cols-10 gap-2 mb-8">
-                        {Array.from({ length: TOTAL_NUMBERS }, (_, i) => i + 1).map(num => {
-                            const drawn = isNumberDrawn(num);
-                            const isJustDrawn = num === justDrawn;
-
+                    {/* Zahlen Grid with row labels on the side */}
+                    <div className="mb-8">
+                        {Array.from({ length: 9 }, (_, rowIdx) => {
+                            const rowStart = rowIdx * 10 + 1;
+                            const rowEnd = Math.min(rowStart + 9, TOTAL_NUMBERS);
+                            const label = rowIdx < 8 ? `${rowStart}-${rowEnd}` : `${rowStart}-${TOTAL_NUMBERS}`;
                             return (
-                                <div
-                                    key={num}
-                                    className={`
-                      aspect-square flex items-center justify-center rounded-lg font-semibold text-sm md:text-base
-                      transition-all duration-500 border
-                      ${drawn
-                                            ? 'bg-gradient-to-br from-emerald-600 to-emerald-800 text-white border-emerald-400/50 shadow-lg shadow-emerald-500/20 scale-105'
-                                            : 'border'
-                                        }
-                      ${isJustDrawn ? 'animate-bounce scale-125 z-10' : ''}
-                    `}
-                                    style={!drawn ? {
-                                        background: 'var(--lotto-cell-empty)',
-                                        color: 'var(--text-muted)',
-                                        borderColor: 'var(--glass-border)'
-                                    } : {}}
-                                >
-                                    {num}
+                                <div key={rowIdx} className="flex items-center gap-1.5 md:gap-2 mb-1.5 md:mb-2 last:mb-0">
+                                    <div className="w-10 md:w-14 shrink-0 text-right text-[9px] md:text-[11px] font-medium pr-1" style={{ color: 'var(--text-muted)' }}>
+                                        {label}
+                                    </div>
+                                    <div className="grid grid-cols-10 gap-1.5 md:gap-2 flex-1">
+                                        {Array.from({ length: 10 }, (_, colIdx) => {
+                                            const num = rowStart + colIdx;
+                                            if (num > TOTAL_NUMBERS) return <div key={colIdx} />;
+                                            const drawn = isNumberDrawn(num);
+                                            const isJustDrawn = num === justDrawn;
+                                            return (
+                                                <div
+                                                    key={num}
+                                                    className={`
+                                                        aspect-square flex items-center justify-center rounded-lg font-display font-semibold text-xs md:text-base
+                                                        transition-all duration-500 border
+                                                        ${drawn
+                                                            ? 'bg-gradient-to-br from-emerald-600 to-emerald-800 text-white border-emerald-400/50 shadow-lg shadow-emerald-500/20 scale-105'
+                                                            : 'border'
+                                                        }
+                                                        ${isJustDrawn ? 'animate-bounce scale-125 z-10' : ''}
+                                                    `}
+                                                    style={!drawn ? {
+                                                        background: 'var(--lotto-cell-empty)',
+                                                        color: 'var(--text-muted)',
+                                                        borderColor: 'var(--glass-border)'
+                                                    } : {}}
+                                                >
+                                                    {num}
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
                                 </div>
                             );
                         })}
@@ -604,62 +633,38 @@ export default function NumberDrawer({
                     {/* Statistik */}
                     <div className="flex justify-center gap-12 flex-wrap pt-6" style={{ borderTop: `1px solid var(--glass-border)` }}>
                         <div className="text-center">
-                            <div className="text-3xl font-bold text-blue-500">{drawnNumbers.length}</div>
+                            <div className="font-display text-3xl font-bold text-emerald-500">{drawnNumbers.length}</div>
                             <div className="text-sm uppercase tracking-wider font-medium" style={{ color: 'var(--text-muted)' }}>{t.drawn}</div>
                         </div>
                         <div className="text-center">
-                            <div className="text-3xl font-bold" style={{ color: 'var(--text-secondary)' }}>{remainingNumbers}</div>
+                            <div className="font-display text-3xl font-bold" style={{ color: 'var(--text-secondary)' }}>{remainingNumbers}</div>
                             <div className="text-sm uppercase tracking-wider font-medium" style={{ color: 'var(--text-muted)' }}>{t.remaining}</div>
                         </div>
                     </div>
                 </div>
 
                 {/* Playing Cards Display or Generate Cards Prompt */}
-                <div className="glass-panel p-6 md:p-8">
+                <div className="glass-panel p-6 md:p-8 relative overflow-hidden">
+                    <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-amber-500/50 to-transparent"></div>
                     {generatedCards.length > 0 ? (
                         <>
-                            <h2 className="text-center text-2xl font-bold mb-6 bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-amber-400">
+                            <h2 className="text-center font-display text-2xl font-bold mb-6 bg-clip-text text-transparent bg-gradient-to-r from-amber-400 to-orange-400">
                                 {t.playingCards}
                             </h2>
-                            <div className="text-center text-sm mb-4" style={{ color: 'var(--text-muted)' }}>
-                                {generatedCards.length} {generatedCards.length === 1 ? t.card : t.cards}
-                            </div>
-
-                            {/* Joined from URL notification */}
-                            {joinedFromUrl && (
-                                <div
-                                    className="mb-4 text-center text-sm py-2 px-4 rounded-lg"
-                                    style={{ backgroundColor: 'var(--btn-secondary-bg)', color: 'var(--text-secondary)' }}
-                                >
-                                    {t.joinedSession}
-                                </div>
-                            )}
-
-                            {/* PDF Export and Share Controls */}
-                            <div className="mb-4 flex flex-wrap gap-3 items-center justify-center">
-                                <div className="flex items-center gap-2">
-                                    <label htmlFor="cardsPerPageSelect" className="text-xs font-medium" style={{ color: 'var(--text-muted)' }}>
-                                        {t.cardsPerPage}:
-                                    </label>
-                                    <select
-                                        id="cardsPerPageSelect"
-                                        value={cardsPerPage}
-                                        onChange={(e) => setCardsPerPage(parseInt(e.target.value))}
-                                        className="input-field text-sm py-1 px-2"
-                                        aria-label={t.cardsPerPage}
-                                    >
-                                        <option value="2">2</option>
-                                        <option value="3">3</option>
-                                        <option value="4">4</option>
-                                        <option value="5">5</option>
-                                    </select>
-                                </div>
+                            <div className="flex items-center justify-center gap-3 text-sm mb-4">
+                                <span style={{ color: 'var(--text-muted)' }}>
+                                    {generatedCards.length} {generatedCards.length === 1 ? t.card : t.cards}
+                                </span>
                                 <button
-                                    onClick={exportToPDF}
-                                    disabled={isExporting}
-                                    className="px-4 py-1 bg-emerald-700 hover:bg-emerald-600 text-white text-sm font-semibold rounded-lg transition-all duration-300 shadow-lg shadow-emerald-500/20 hover:shadow-emerald-500/40 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
+                                    onClick={() => setShowPdfDrawer(!showPdfDrawer)}
+                                    className="btn-success text-xs flex items-center gap-1.5"
                                 >
-                                    {isExporting ? t.creatingPdf : t.downloadPdf}
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                                        <polyline points="7 10 12 15 17 10"></polyline>
+                                        <line x1="12" y1="15" x2="12" y2="3"></line>
+                                    </svg>
+                                    {t.exportPdf}
                                 </button>
                                 {sessionData && isHost && (
                                     <button
@@ -676,6 +681,48 @@ export default function NumberDrawer({
                                     </button>
                                 )}
                             </div>
+
+                            {/* Joined from URL notification */}
+                            {joinedFromUrl && (
+                                <div
+                                    className="mb-4 text-center text-sm py-2 px-4 rounded-lg"
+                                    style={{ backgroundColor: 'var(--btn-secondary-bg)', color: 'var(--text-secondary)' }}
+                                >
+                                    {t.joinedSession}
+                                </div>
+                            )}
+
+                            {/* PDF Export Drawer */}
+                            {showPdfDrawer && (
+                                <div className="mb-4 p-3 rounded-xl animate-slide-up" style={{ background: 'var(--input-bg)', border: '1px solid var(--glass-border)' }}>
+                                    <div className="flex gap-3 items-center justify-between">
+                                        <div className="flex items-center gap-2">
+                                            <label htmlFor="cardsPerPageSelect" className="text-xs font-medium whitespace-nowrap" style={{ color: 'var(--text-muted)' }}>
+                                                {t.cardsPerPage}:
+                                            </label>
+                                            <select
+                                                id="cardsPerPageSelect"
+                                                value={cardsPerPage}
+                                                onChange={(e) => setCardsPerPage(parseInt(e.target.value))}
+                                                className="input-field text-sm py-1 px-2"
+                                                aria-label={t.cardsPerPage}
+                                            >
+                                                <option value="2">2</option>
+                                                <option value="3">3</option>
+                                                <option value="4">4</option>
+                                                <option value="5">5</option>
+                                            </select>
+                                        </div>
+                                        <button
+                                            onClick={exportToPDF}
+                                            disabled={isExporting}
+                                            className="btn-primary text-sm py-2 px-4"
+                                        >
+                                            {isExporting ? t.creatingPdf : t.downloadPdf}
+                                        </button>
+                                    </div>
+                                </div>
+                            )}
 
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-h-[600px] overflow-y-auto">
                                 {generatedCards.map((card) => (
@@ -710,7 +757,7 @@ export default function NumberDrawer({
                     ) : (
                         // Host can generate cards
                         <>
-                            <h2 className="text-center text-2xl font-bold mb-6 bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-amber-400">
+                            <h2 className="text-center font-display text-2xl font-bold mb-6 bg-clip-text text-transparent bg-gradient-to-r from-amber-400 to-orange-400">
                                 {t.tabGenerateCards}
                             </h2>
                             <div className="flex flex-col items-center justify-center">
@@ -772,7 +819,7 @@ export default function NumberDrawer({
                                     <button
                                         onClick={generateCards}
                                         disabled={isGenerating}
-                                        className="w-full px-6 py-3 bg-amber-600 hover:bg-amber-500 text-white font-semibold rounded-xl transition-all duration-300 shadow-lg shadow-amber-500/20 hover:shadow-amber-500/40 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
+                                        className="btn-primary w-full disabled:opacity-50 disabled:cursor-not-allowed"
                                         aria-label={isGenerating ? t.generating : t.generateCards}
                                     >
                                         {isGenerating ? t.generating : t.generateCards}
@@ -785,42 +832,62 @@ export default function NumberDrawer({
             </div>
 
             {/* Gezogene Zahlen Liste */}
-            <div className="glass-panel p-6 md:p-8">
-                <h2 className="text-center text-2xl font-bold mb-6 bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-amber-400">
+            <div className="glass-panel p-6 md:p-8 relative overflow-hidden">
+                <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-amber-500/50 to-transparent"></div>
+                <h2 className="text-center font-display text-2xl font-bold mb-6 bg-clip-text text-transparent bg-gradient-to-r from-amber-400 to-amber-600">
                     {t.drawnNumbersList}
                 </h2>
-                <div className="flex flex-wrap gap-3 justify-center min-h-[50px] items-center">
+                <div className="flex flex-wrap gap-2 justify-center min-h-[50px] items-center">
                     {drawnNumbers.length === 0 ? (
                         <span className="italic" style={{ color: 'var(--text-muted)' }}>{t.noNumbersDrawn}</span>
                     ) : (
-                        drawnNumbers.map((num, idx) => (
-                            <div
-                                key={idx}
-                                className="w-10 h-10 bg-gradient-to-br from-amber-400 to-amber-600 rounded-full flex items-center justify-center font-bold text-white text-sm shadow-lg border border-amber-300/30 animate-draw"
-                                style={{ animationDelay: `${idx * 0.05}s` }}
-                            >
-                                {num}
-                            </div>
-                        ))
+                        (showAllDrawn ? drawnNumbers : drawnNumbers.slice(-20)).map((num, idx) => {
+                            const isLatest = !showAllDrawn
+                                ? idx === Math.min(drawnNumbers.length, 20) - 1
+                                : idx === drawnNumbers.length - 1;
+                            return (
+                                <div
+                                    key={`${idx}-${num}`}
+                                    className={`w-9 h-9 bg-gradient-to-br from-amber-500 to-amber-700 rounded-full flex items-center justify-center font-display font-bold text-white text-sm shadow-md border border-amber-400/30 ${isLatest ? 'ring-2 ring-amber-400/50 scale-110' : ''}`}
+                                >
+                                    {num}
+                                </div>
+                            );
+                        })
                     )}
                 </div>
+                {drawnNumbers.length > 20 && (
+                    <div className="text-center mt-4">
+                        <button
+                            onClick={() => setShowAllDrawn(!showAllDrawn)}
+                            className="text-sm font-medium transition-colors hover:underline"
+                            style={{ color: 'var(--primary)' }}
+                        >
+                            {showAllDrawn ? t.showLess : `${t.showAll} (${drawnNumbers.length})`}
+                        </button>
+                    </div>
+                )}
             </div>
 
             {/* Celebration Overlay */}
             {showCelebration && (
                 <div
-                    className="fixed inset-0 flex items-center justify-center z-[10000] pointer-events-none"
+                    className="fixed inset-0 flex items-center justify-center z-[10000] cursor-pointer"
                     role="alert"
                     aria-live="assertive"
+                    onClick={() => {
+                        setShowCelebration(false);
+                        setCelebratingPlayers([]);
+                    }}
                 >
-                    <div className="bg-gradient-to-br from-amber-400 via-amber-500 to-amber-600 text-white px-16 py-12 rounded-3xl shadow-2xl border-4 border-white/30 animate-bounce">
-                        <div className="text-7xl font-black tracking-wider drop-shadow-2xl">
+                    <div className="bg-gradient-to-br from-amber-400 via-amber-500 to-amber-600 text-white px-12 md:px-16 py-10 md:py-12 rounded-3xl shadow-2xl border-4 border-white/30 animate-celebration pointer-events-none">
+                        <div className="font-display text-5xl md:text-7xl font-bold tracking-wider drop-shadow-2xl text-center">
                             {t.lottoWin}
                         </div>
-                        <div className="text-2xl font-semibold mt-4 text-center text-white/90">
+                        <div className="font-display text-xl md:text-2xl font-semibold mt-4 text-center text-white/90">
                             {celebratingPlayers.join(', ')}
                         </div>
-                        <div className="text-xl font-medium mt-2 text-center text-white/80">
+                        <div className="text-base md:text-lg font-medium mt-2 text-center text-white/70">
                             {t.rowComplete}
                         </div>
                     </div>
