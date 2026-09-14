@@ -223,11 +223,13 @@ export function useGameSync({
             try {
                 const response = await fetch(`/api/session/${seed}`);
 
-                if (response.status === 503) {
+                // Any failed poll means this spectator is watching numbers that
+                // may already be stale, so say so - the same way a host is told
+                // when its pushes stop landing.
+                if (!response.ok) {
                     if (!cancelled) setSyncUnavailable(true);
                     return;
                 }
-                if (!response.ok) return;
 
                 const state: GameState = await response.json();
                 if (cancelled) return;
@@ -263,6 +265,7 @@ export function useGameSync({
                 }
             } catch (error) {
                 console.error('Polling error:', error);
+                if (!cancelled) setSyncUnavailable(true);
             }
         };
 

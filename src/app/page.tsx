@@ -23,6 +23,12 @@ export default function Home() {
     const [sessionData, setSessionData] = useState<SessionData | null>(null);
     const [joinedFromUrl, setJoinedFromUrl] = useState(false);
 
+    // The URL can only be read in an effect, so the first paint does not yet
+    // know whether this tab is a host or a guest. Until it does, host controls
+    // stay disabled: a draw in that window would mint a new seed and overwrite
+    // the incoming share link, stranding the guest or the returning host.
+    const [sessionResolved, setSessionResolved] = useState(false);
+
     // Check for session in URL on mount
     useEffect(() => {
         const urlSession = getSessionFromUrl();
@@ -62,6 +68,9 @@ export default function Home() {
             // drawn numbers and card config - comes from the sync API.
             setSeedInUrl(urlSession.seed);
         }
+
+        // Always resolve, session or not, so controls are never stuck disabled
+        setSessionResolved(true);
     }, [t.playerLabel]);
 
     const languages = SUPPORTED_LANGUAGES.map(lang => ({
@@ -188,6 +197,7 @@ export default function Home() {
                         sessionData={sessionData}
                         setSessionData={setSessionData}
                         joinedFromUrl={joinedFromUrl}
+                        sessionResolved={sessionResolved}
                     />
                 </div>
             </div>

@@ -129,6 +129,10 @@ The app supports shareable URLs for game sessions:
 - **Host vs guest on load** is decided by whether `getHostToken(seed)` returns a
   token for that seed, not by the mere presence of `?s=` - otherwise a host
   returning to its own session would be demoted to a spectator.
+- The URL can only be read in an effect, so the first paint does not yet know
+  the role. `sessionResolved` keeps draw and reset disabled until it does: a
+  draw in that window would mint a new seed and `setSeedInUrl()` would overwrite
+  the incoming share link, leaving the guest unable to rejoin even by reloading.
 - **Cross-device sync**: Polling with Vercel KV for state sync across different devices
 - **Same-browser sync**: Uses BroadcastChannel API for syncing across browser tabs
 - **Session utilities** in `src/utils/session.ts`:
@@ -184,7 +188,8 @@ The cross-device sync uses a polling-based approach with Vercel KV:
 - The mount read honours a recorded reset: an empty state with `lastUpdate > 0`
   invokes `onReset`, so a host reopening an older full share URL does not
   resurrect the numbers that link still carries.
-- Any push response other than `2xx` or `409` sets `syncUnavailable`. `409` is
+- Any push response other than `2xx` or `409`, and any failed or thrown guest
+  poll, sets `syncUnavailable`; the next success clears it. `409` is
   the expected "a newer write already won" answer and means sync is healthy;
   everything else means guests have stopped receiving this host's draws, and
   the host is told rather than left playing on unaware.

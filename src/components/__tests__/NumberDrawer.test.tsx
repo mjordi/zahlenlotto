@@ -57,6 +57,7 @@ function renderDrawer(overrides: Partial<React.ComponentProps<typeof NumberDrawe
         sessionData: null,
         setSessionData: jest.fn(),
         joinedFromUrl: false,
+        sessionResolved: true,
         ...overrides,
     };
 
@@ -131,6 +132,15 @@ describe('NumberDrawer', () => {
             syncState = { syncUnavailable: false, isHydrating: true };
 
             renderDrawer({ sessionData: SESSION, joinedFromUrl: false });
+
+            expect(screen.getByRole('button', { name: /Zahl ziehen/i })).toBeDisabled();
+            expect(screen.getByRole('button', { name: /Neu starten/i })).toBeDisabled();
+        });
+
+        it('should hold drawing until the URL role check has finished', () => {
+            // Before the check lands the tab still looks like a fresh host; a
+            // draw here would mint a new seed over the incoming share link.
+            renderDrawer({ sessionData: null, joinedFromUrl: false, sessionResolved: false });
 
             expect(screen.getByRole('button', { name: /Zahl ziehen/i })).toBeDisabled();
             expect(screen.getByRole('button', { name: /Neu starten/i })).toBeDisabled();

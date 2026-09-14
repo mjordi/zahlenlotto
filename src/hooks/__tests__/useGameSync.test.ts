@@ -298,6 +298,51 @@ describe('useGameSync', () => {
             expect(callbacks.onCardConfigUpdate).toHaveBeenCalledTimes(1);
         });
 
+        it.each([500, 503, 404])(
+            'should warn a guest when polling fails with %i',
+            async (status) => {
+                fetchMock.mockImplementation(async () => ({
+                    ok: false,
+                    status,
+                    json: async () => ({ error: 'nope' }),
+                }));
+
+                const { result } = renderSync({ seed: 'seedA', isHost: false });
+
+                await waitFor(() => {
+                    expect(result.current.syncUnavailable).toBe(true);
+                });
+            }
+        );
+
+        it('should warn a guest when polling throws', async () => {
+            fetchMock.mockImplementation(async () => {
+                throw new TypeError('network down');
+            });
+
+            const { result } = renderSync({ seed: 'seedA', isHost: false });
+
+            await waitFor(() => {
+                expect(result.current.syncUnavailable).toBe(true);
+            });
+        });
+
+        it('should clear the warning once polling recovers', async () => {
+            let failing = true;
+            const original = fetchMock.getMockImplementation()!;
+            fetchMock.mockImplementation(async (url: string, init?: RequestInit) => {
+                if (failing) return { ok: false, status: 500, json: async () => ({}) };
+                return original(url, init);
+            });
+
+            const { result } = renderSync({ seed: 'seedA', isHost: false });
+
+            await waitFor(() => expect(result.current.syncUnavailable).toBe(true));
+
+            failing = false;
+            await waitFor(() => expect(result.current.syncUnavailable).toBe(false));
+        });
+
         it('should not poll repeatedly as a host', async () => {
             renderSync({ seed: 'seedA', hostToken: HOST_TOKEN, isHost: true });
 

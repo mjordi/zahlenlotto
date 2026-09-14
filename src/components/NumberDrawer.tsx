@@ -30,6 +30,8 @@ interface NumberDrawerProps {
     sessionData: SessionData | null;
     setSessionData: (data: SessionData | null) => void;
     joinedFromUrl: boolean;
+    /** False until the URL has been inspected and the host/guest role is known. */
+    sessionResolved: boolean;
 }
 
 export default function NumberDrawer({
@@ -44,6 +46,7 @@ export default function NumberDrawer({
     sessionData,
     setSessionData,
     joinedFromUrl,
+    sessionResolved,
 }: NumberDrawerProps) {
     const [isAnimating, setIsAnimating] = useState(false);
     const [justDrawn, setJustDrawn] = useState<number | null>(null);
@@ -279,7 +282,10 @@ export default function NumberDrawer({
 
         // Wait for the mount-time read: drawing off the pre-hydration board
         // would overwrite the history this session is being resumed from.
-        if (isHydrating) return;
+        // Also wait for the URL role check - before it lands this tab still
+        // looks like a fresh host and a draw would mint a seed over the
+        // incoming share link.
+        if (isHydrating || !sessionResolved) return;
 
         if (drawnNumbers.length >= TOTAL_NUMBERS || isAnimating) return;
 
@@ -316,7 +322,7 @@ export default function NumberDrawer({
             // Just-drawn Animation entfernen
             setTimeout(() => setJustDrawn(null), 500);
         }, 300);
-    }, [drawnNumbers, isAnimating, initAudio, playSound, setCurrentNumber, setDrawnNumbers, setSessionData, pushState, isHost, ensureHostSession, isHydrating]);
+    }, [drawnNumbers, isAnimating, initAudio, playSound, setCurrentNumber, setDrawnNumbers, setSessionData, pushState, isHost, ensureHostSession, isHydrating, sessionResolved]);
 
     /**
      * Row completion runs off the drawn numbers themselves, so guests receiving
@@ -339,7 +345,7 @@ export default function NumberDrawer({
     // Reset mit Bestätigung (only host can reset)
     const reset = useCallback(() => {
         // Guests cannot reset the game
-        if (!isHost || isHydrating) return;
+        if (!isHost || isHydrating || !sessionResolved) return;
 
         if (drawnNumbers.length > 0) {
             if (!confirm(t.confirmRestart)) {
@@ -357,7 +363,7 @@ export default function NumberDrawer({
         // Reset state on server (also broadcasts to same-browser tabs)
         ensureHostSession();
         resetState();
-    }, [drawnNumbers.length, t.confirmRestart, setDrawnNumbers, setCurrentNumber, resetState, isHost, ensureHostSession, isHydrating]);
+    }, [drawnNumbers.length, t.confirmRestart, setDrawnNumbers, setCurrentNumber, resetState, isHost, ensureHostSession, isHydrating, sessionResolved]);
 
     // Tastatursteuerung (draw/reset only work for host)
     useEffect(() => {
@@ -541,7 +547,7 @@ export default function NumberDrawer({
                 <div className="flex gap-4 justify-center flex-wrap mt-8">
                     <button
                         onClick={drawNumber}
-                        disabled={drawnNumbers.length >= TOTAL_NUMBERS || isAnimating || !isHost || isHydrating}
+                        disabled={drawnNumbers.length >= TOTAL_NUMBERS || isAnimating || !isHost || isHydrating || !sessionResolved}
                         className="btn-primary px-8 py-4 text-lg disabled:opacity-50 disabled:cursor-not-allowed"
                         title={!isHost ? t.hostOnly : undefined}
                     >
@@ -549,7 +555,7 @@ export default function NumberDrawer({
                     </button>
                     <button
                         onClick={reset}
-                        disabled={!isHost || isHydrating}
+                        disabled={!isHost || isHydrating || !sessionResolved}
                         className="btn-danger px-8 py-4 text-lg disabled:opacity-50 disabled:cursor-not-allowed"
                         title={!isHost ? t.hostOnly : undefined}
                     >
