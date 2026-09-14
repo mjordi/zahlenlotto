@@ -93,6 +93,21 @@ export function getHostToken(seed: string): string | null {
 }
 
 /**
+ * Puts just the session seed in the URL.
+ *
+ * Both host and guest need this: without a seed in the URL a reload cannot tell
+ * which session the tab belonged to, so the host would start a fresh local game
+ * and strand the guests on the abandoned one. Only the seed is kept - the
+ * volatile state comes from the sync API, and the host token never leaves
+ * sessionStorage.
+ */
+export function setSeedInUrl(seed: string): void {
+    if (typeof window === 'undefined') return;
+    const params = new URLSearchParams({ s: seed });
+    window.history.replaceState({}, '', `${window.location.pathname}?${params}`);
+}
+
+/**
  * Converts a string seed to a numeric hash for the PRNG.
  */
 function seedToNumber(seed: string): number {

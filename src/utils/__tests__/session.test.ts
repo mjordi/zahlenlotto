@@ -7,6 +7,7 @@ import {
     generateHostToken,
     storeHostToken,
     getHostToken,
+    setSeedInUrl,
     HOST_TOKEN_LENGTH,
     SessionData,
 } from '../session';
@@ -475,6 +476,34 @@ describe('session utilities', () => {
 
             const url = createShareableUrl({ seed: 'seedA', drawnNumbers: [1, 2] });
             expect(url).not.toContain(token);
+        });
+    });
+    describe('setSeedInUrl', () => {
+        it('should put the seed in the query string', () => {
+            setSeedInUrl('abc12345');
+
+            expect(window.location.search).toBe('?s=abc12345');
+        });
+
+        it('should replace any previously encoded session state', () => {
+            window.history.replaceState({}, '', '/?s=old&d=1,2,3&p=2&c=3&n=Alice');
+
+            setSeedInUrl('new98765');
+
+            const params = new URLSearchParams(window.location.search);
+            expect(params.get('s')).toBe('new98765');
+            expect(params.has('d')).toBe(false);
+            expect(params.has('p')).toBe(false);
+            expect(params.has('n')).toBe(false);
+        });
+
+        it('should never expose the host token', () => {
+            const token = generateHostToken();
+            storeHostToken('abc12345', token);
+
+            setSeedInUrl('abc12345');
+
+            expect(window.location.href).not.toContain(token);
         });
     });
 });

@@ -135,7 +135,7 @@ describe('useGameSync', () => {
             });
 
             expect(posts).toHaveLength(1);
-            expect(posts[0].body).toEqual({ drawnNumbers: [], currentNumber: null });
+            expect(posts[0].body).toMatchObject({ drawnNumbers: [], currentNumber: null });
             expect(fetchMock.mock.calls.every(([, init]) => init?.method !== 'DELETE')).toBe(true);
         });
 
@@ -261,12 +261,123 @@ describe('useGameSync', () => {
             expect(callbacks.onCardConfigUpdate).toHaveBeenCalledTimes(1);
         });
 
-        it('should not poll as a host', async () => {
+        it('should not poll repeatedly as a host', async () => {
             renderSync({ seed: 'seedA', hostToken: HOST_TOKEN, isHost: true });
 
-            await new Promise(resolve => setTimeout(resolve, 50));
+            await new Promise(resolve => setTimeout(resolve, 60));
 
-            expect(fetchMock).not.toHaveBeenCalled();
+            // Exactly one read: the mount-time hydrate, never the polling loop
+            const reads = fetchMock.mock.calls.filter(([, init]) => init?.method !== 'POST');
+            expect(reads).toHaveLength(1);
+        });
+    });
+
+    describe('host resuming after a refresh', () => {
+        it('should load the stored session on mount', async () => {
+            serverState = {
+                drawnNumbers: [4, 8, 15],
+                currentNumber: 15,
+                lastUpdate: 1000,
+                numberOfPlayers: 2,
+                cardsPerPlayer: 3,
+                playerNames: ['Alice', 'Bob'],
+            };
+
+            const { callbacks } = renderSync({ seed: 'seedA', hostToken: HOST_TOKEN, isHost: true });
+
+            await waitFor(() => {
+                expect(callbacks.onStateUpdate).toHaveBeenCalledWith([4, 8, 15], 15);
+            });
+            expect(callbacks.onCardConfigUpdate).toHaveBeenCalledWith({
+                numberOfPlayers: 2,
+                cardsPerPlayer: 3,
+                playerNames: ['Alice', 'Bob'],
+            });
+        });
+
+        it('should not resurrect anything when the server has no state', async () => {
+            serverState = { drawnNumbers: [], currentNumber: null, lastUpdate: 0 };
+
+            const { callbacks } = renderSync({ seed: 'seedA', hostToken: HOST_TOKEN, isHost: true });
+
+            await waitFor(() => expect(fetchMock).toHaveBeenCalled());
+
+            expect(callbacks.onStateUpdate).not.toHaveBeenCalled();
+            expect(callbacks.onReset).not.toHaveBeenCalled();
+        });
+
+        it('should never undo a draw the host made while the hydrate was in flight', async () => {
+            serverState = { drawnNumbers: [1, 2], currentNumber: 2, lastUpdate: 1000 };
+
+            // Hold the mount-time read open so the host can draw underneath it
+            let releaseRead: (() => void) | undefined;
+            const original = fetchMock.getMockImplementation()!;
+            fetchMock.mockImplementation(async (url: string, init?: RequestInit) => {
+                if (init?.method !== 'POST') {
+                    await new Promise<void>(resolve => { releaseRead = resolve; });
+                }
+                return original(url, init);
+            });
+
+            const { result, callbacks } = renderSync({ seed: 'seedA', hostToken: HOST_TOKEN, isHost: true });
+
+            await act(async () => {
+                await result.current.pushState([9], 9);
+                releaseRead?.();
+                await new Promise(resolve => setTimeout(resolve, 30));
+            });
+
+            // The stale read must not drag the host back to the old numbers
+            expect(callbacks.onStateUpdate).not.toHaveBeenCalled();
+            expect(posts.at(-1)?.body.drawnNumbers).toEqual([9]);
+        });
+    });
+
+    describe('ordering of overlapping host writes', () => {
+        it('should stamp each write with a strictly increasing sequence', async () => {
+            const { result } = renderSync({ seed: 'seedA', hostToken: HOST_TOKEN });
+
+            await act(async () => {
+                await result.current.pushState([1], 1);
+                await result.current.pushState([1, 2], 2);
+                await result.current.resetState();
+            });
+
+            const seqs = posts.map(p => p.body.clientSeq as number);
+            expect(seqs).toHaveLength(3);
+            expect(seqs[1]).toBeGreaterThan(seqs[0]);
+            expect(seqs[2]).toBeGreaterThan(seqs[1]);
+        });
+
+        it('should send a slow draw and a following reset in order', async () => {
+            // Make the first POST hang so the reset would overtake it if the
+            // writes were not chained.
+            let releaseFirst: (() => void) | undefined;
+            const original = fetchMock.getMockImplementation()!;
+            let postCount = 0;
+
+            fetchMock.mockImplementation(async (url: string, init?: RequestInit) => {
+                if (init?.method === 'POST' && ++postCount === 1) {
+                    await new Promise<void>(resolve => { releaseFirst = resolve; });
+                }
+                return original(url, init);
+            });
+
+            const { result } = renderSync({ seed: 'seedA', hostToken: HOST_TOKEN });
+
+            let draw: Promise<void> | undefined;
+            let reset: Promise<void> | undefined;
+            await act(async () => {
+                draw = result.current.pushState([7], 7);
+                reset = result.current.resetState();
+                await new Promise(resolve => setTimeout(resolve, 20));
+                // The reset must not have been sent while the draw is in flight
+                expect(posts).toHaveLength(0);
+                releaseFirst?.();
+                await Promise.all([draw, reset]);
+            });
+
+            expect(posts.map(p => p.body.drawnNumbers)).toEqual([[7], []]);
         });
     });
 });

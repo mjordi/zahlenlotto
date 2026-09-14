@@ -42,6 +42,8 @@ interface GameState {
     numberOfPlayers?: number;
     cardsPerPlayer?: number;
     playerNames?: string[];
+    // Strictly increasing per host write, used to refuse out-of-order arrivals
+    clientSeq?: number;
     // Secret proving session ownership - never sent to clients
     hostToken?: string;
 }
@@ -118,6 +120,7 @@ function toPublicState(state: GameState): Omit<GameState, 'hostToken'> {
         numberOfPlayers: state.numberOfPlayers,
         cardsPerPlayer: state.cardsPerPlayer,
         playerNames: state.playerNames,
+        clientSeq: state.clientSeq,
     };
 }
 
@@ -192,10 +195,22 @@ export async function POST(
             return NextResponse.json({ error: 'Not the session host' }, { status: 403 });
         }
 
+        // Two host writes can overlap in flight (a slow draw, then a reset).
+        // Refuse the one that was already overtaken rather than letting it
+        // resurrect state the host has since replaced.
+        const clientSeq = typeof body.clientSeq === 'number' ? body.clientSeq : null;
+        if (clientSeq !== null && existing?.clientSeq !== undefined && clientSeq < existing.clientSeq) {
+            return NextResponse.json(
+                { error: 'Stale update', lastUpdate: existing.lastUpdate },
+                { status: 409 }
+            );
+        }
+
         const state: GameState = {
             drawnNumbers: body.drawnNumbers,
             currentNumber: typeof body.currentNumber === 'number' ? body.currentNumber : null,
             lastUpdate: Date.now(),
+            clientSeq: clientSeq ?? existing?.clientSeq,
             // Preserve card configuration unless this request supplies a new one
             numberOfPlayers: existing?.numberOfPlayers,
             cardsPerPlayer: existing?.cardsPerPlayer,

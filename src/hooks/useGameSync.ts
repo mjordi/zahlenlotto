@@ -20,6 +20,7 @@ interface GameState {
     numberOfPlayers?: number;
     cardsPerPlayer?: number;
     playerNames?: string[];
+    clientSeq?: number;
 }
 
 interface UseGameSyncOptions {
@@ -66,7 +67,14 @@ export function useGameSync({
     const lastUpdateRef = useRef<number>(0);
     const lastCardConfigRef = useRef<string>(''); // Track card config changes
     const sessionSyncRef = useRef<SessionSync | null>(null);
+    const hasHydratedRef = useRef(false);
     const [syncUnavailable, setSyncUnavailable] = useState(false);
+
+    // Host writes are stamped with a strictly increasing sequence and chained,
+    // so two overlapping pushes can never land out of order (see postState).
+    // Seeded from the clock so it keeps rising across a page reload too.
+    const writeSeqRef = useRef(0);
+    const writeChainRef = useRef<Promise<void>>(Promise.resolve());
 
     // Session identity lives in refs so pushes never read a stale closure:
     // a session created during an event handler must be usable immediately.
@@ -114,6 +122,57 @@ export function useGameSync({
         return () => {
             sync.destroy();
             sessionSyncRef.current = null;
+        };
+    }, [seed, isHost, enabled]);
+
+    /**
+     * Load the stored state once (hosts only).
+     *
+     * Hosts never poll, so without this a refreshed host would resume with an
+     * empty board and its next push would wipe the real session out from under
+     * the guests. Applies only while we have not written anything ourselves, so
+     * it can never undo a draw the host just made.
+     */
+    useEffect(() => {
+        if (!seed || !enabled || !isHost || hasHydratedRef.current) return;
+        hasHydratedRef.current = true;
+
+        let cancelled = false;
+
+        (async () => {
+            try {
+                const response = await fetch(`/api/session/${seed}`);
+                if (!response.ok) return;
+
+                const state: GameState = await response.json();
+                if (cancelled || state.lastUpdate <= 0 || lastUpdateRef.current > 0) return;
+
+                lastUpdateRef.current = state.lastUpdate;
+                // Keep our writes above anything the previous page load sent
+                if (state.clientSeq && state.clientSeq > writeSeqRef.current) {
+                    writeSeqRef.current = state.clientSeq;
+                }
+
+                if (state.drawnNumbers.length > 0) {
+                    onStateUpdateRef.current(state.drawnNumbers, state.currentNumber);
+                }
+
+                if (state.numberOfPlayers && state.cardsPerPlayer) {
+                    const names = state.playerNames || [];
+                    lastCardConfigRef.current = `${state.numberOfPlayers}-${state.cardsPerPlayer}-${JSON.stringify(names)}`;
+                    onCardConfigUpdateRef.current({
+                        numberOfPlayers: state.numberOfPlayers,
+                        cardsPerPlayer: state.cardsPerPlayer,
+                        playerNames: names,
+                    });
+                }
+            } catch (error) {
+                console.error('Session hydrate error:', error);
+            }
+        })();
+
+        return () => {
+            cancelled = true;
         };
     }, [seed, isHost, enabled]);
 
@@ -179,36 +238,57 @@ export function useGameSync({
         };
     }, [seed, isHost, enabled, pollingInterval]);
 
-    /** Sends state to the server. Returns silently when we are not the host. */
+    /**
+     * Sends state to the server. Returns silently when we are not the host.
+     *
+     * Writes are queued behind each other and carry a strictly increasing
+     * `clientSeq`. Without both, a slow draw followed by a fast reset could
+     * arrive in the wrong order and the stale draw would overwrite the reset,
+     * pushing every guest back to numbers the host had already cleared. The
+     * chain prevents the overlap; the sequence lets the server refuse anything
+     * that still slips through.
+     */
     const postState = useCallback(async (body: Record<string, unknown>) => {
         const currentSeed = seedRef.current;
         const currentToken = hostTokenRef.current;
 
         if (!currentSeed || !currentToken || !isHostRef.current) return;
 
-        try {
-            const response = await fetch(`/api/session/${currentSeed}`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'x-host-token': currentToken,
-                },
-                body: JSON.stringify(body),
-            });
+        // Clock-seeded so it also keeps rising across a page reload
+        writeSeqRef.current = Math.max(Date.now(), writeSeqRef.current + 1);
+        const clientSeq = writeSeqRef.current;
 
-            if (response.status === 503) {
-                setSyncUnavailable(true);
-                return;
-            }
+        const send = async () => {
+            try {
+                const response = await fetch(`/api/session/${currentSeed}`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'x-host-token': currentToken,
+                    },
+                    body: JSON.stringify({ ...body, clientSeq }),
+                });
 
-            if (response.ok) {
-                const data = await response.json();
-                lastUpdateRef.current = data.lastUpdate;
-                setSyncUnavailable(false);
+                if (response.status === 503) {
+                    setSyncUnavailable(true);
+                    return;
+                }
+
+                // 409 means the server already has a newer write; nothing to do
+                if (response.ok) {
+                    const data = await response.json();
+                    lastUpdateRef.current = data.lastUpdate;
+                    setSyncUnavailable(false);
+                }
+            } catch (error) {
+                console.error('Sync push error:', error);
             }
-        } catch (error) {
-            console.error('Sync push error:', error);
-        }
+        };
+
+        const queued = writeChainRef.current.then(send);
+        // Keep the chain alive even if one write throws
+        writeChainRef.current = queued.catch(() => undefined);
+        return queued;
     }, []);
 
     // Push state to server (host only)

@@ -5,7 +5,7 @@ import { useLanguage } from '@/contexts/LanguageContext';
 import { SUPPORTED_LANGUAGES } from '@/utils/translations';
 import { Card } from '@/utils/lotto';
 import ThemeToggle from '@/components/ThemeToggle';
-import { SessionData, getSessionFromUrl, generateLottoCardWithSeed } from '@/utils/session';
+import { SessionData, getSessionFromUrl, generateLottoCardWithSeed, getHostToken, setSeedInUrl } from '@/utils/session';
 
 import NumberDrawer from '@/components/NumberDrawer';
 
@@ -28,7 +28,11 @@ export default function Home() {
         const urlSession = getSessionFromUrl();
         if (urlSession) {
             setSessionData(urlSession);
-            setJoinedFromUrl(true);
+
+            // A host token stored for this seed means this tab created the
+            // session and is returning to it (a refresh), not joining someone
+            // else's. Only a tab without the token is a guest.
+            setJoinedFromUrl(!getHostToken(urlSession.seed));
 
             // Restore drawn numbers from URL
             if (urlSession.drawnNumbers.length > 0) {
@@ -56,8 +60,7 @@ export default function Home() {
             // Keep only the seed in the URL: it keeps a reload in the same session
             // (instead of starting a new local game), while the volatile state -
             // drawn numbers and card config - comes from the sync API.
-            const seedParam = new URLSearchParams({ s: urlSession.seed });
-            window.history.replaceState({}, '', `${window.location.pathname}?${seedParam}`);
+            setSeedInUrl(urlSession.seed);
         }
     }, [t.playerLabel]);
 

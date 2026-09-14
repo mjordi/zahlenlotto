@@ -14,6 +14,7 @@ import {
     generateHostToken,
     storeHostToken,
     getHostToken,
+    setSeedInUrl,
 } from '@/utils/session';
 import { useGameSync, type CardConfig } from '@/hooks/useGameSync';
 
@@ -112,9 +113,11 @@ export default function NumberDrawer({
             setCurrentNumber(current);
         }, [setDrawnNumbers, setCurrentNumber]),
         onCardConfigUpdate: useCallback((config: CardConfig) => {
-            // Only update cards if we're a guest and don't already have cards
+            // Applies both to a guest receiving the host's cards and to a host
+            // resuming after a refresh. Having no cards yet is what makes this
+            // safe - it can never clobber cards already on screen.
             const seed = sessionData?.seed;
-            if (!isHost && seed && generatedCards.length === 0) {
+            if (seed && generatedCards.length === 0) {
                 const cards = generateCardsFromConfig(
                     seed,
                     config.numberOfPlayers,
@@ -126,7 +129,7 @@ export default function NumberDrawer({
                 setCardsPerPlayer(config.cardsPerPlayer);
                 setPlayerNames(config.playerNames);
             }
-        }, [isHost, sessionData, generatedCards.length, generateCardsFromConfig, setGeneratedCards]),
+        }, [sessionData, generatedCards.length, generateCardsFromConfig, setGeneratedCards]),
         onReset: useCallback(() => {
             setDrawnNumbers([]);
             setCurrentNumber(null);
@@ -148,6 +151,10 @@ export default function NumberDrawer({
             setHostToken(token);
         }
         claimSession(seed, token);
+
+        // The seed has to be in the URL for a refresh to resume this session
+        // rather than start a new local game and strand the guests.
+        setSeedInUrl(seed);
 
         return { seed, isNew: !existingSeed };
     }, [sessionData, hostToken, claimSession]);

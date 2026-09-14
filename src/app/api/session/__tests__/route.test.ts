@@ -315,6 +315,59 @@ describe('Session API Route', () => {
         });
     });
 
+    describe('Out-of-order host writes', () => {
+        it('should reject a write that a newer one already overtook', async () => {
+            const seed = 'staleWriteSeed';
+
+            // Reset (seq 200) lands first, then a slow draw (seq 100) arrives
+            await POST(
+                hostRequest({ drawnNumbers: [], currentNumber: null, clientSeq: 200 }) as never,
+                createParams(seed)
+            );
+            const stale = await POST(
+                hostRequest({ drawnNumbers: [5, 6], currentNumber: 6, clientSeq: 100 }) as never,
+                createParams(seed)
+            );
+
+            expect(stale.status).toBe(409);
+            expect((await stale.json()).error).toBe('Stale update');
+
+            // The reset stands - guests must not regress to the cleared numbers
+            const state = await getState(seed);
+            expect(state.drawnNumbers).toEqual([]);
+        });
+
+        it('should accept writes that arrive in order', async () => {
+            const seed = 'orderedWriteSeed';
+
+            await POST(
+                hostRequest({ drawnNumbers: [1], currentNumber: 1, clientSeq: 100 }) as never,
+                createParams(seed)
+            );
+            const newer = await POST(
+                hostRequest({ drawnNumbers: [1, 2], currentNumber: 2, clientSeq: 200 }) as never,
+                createParams(seed)
+            );
+
+            expect(newer.status).toBe(200);
+            const state = await getState(seed);
+            expect(state.drawnNumbers).toEqual([1, 2]);
+            expect(state.clientSeq).toBe(200);
+        });
+
+        it('should still accept a write with no sequence', async () => {
+            const seed = 'noSeqSeed';
+
+            const response = await POST(
+                hostRequest({ drawnNumbers: [3], currentNumber: 3 }) as never,
+                createParams(seed)
+            );
+
+            expect(response.status).toBe(200);
+            expect((await getState(seed)).drawnNumbers).toEqual([3]);
+        });
+    });
+
     describe('State persistence', () => {
         it('should update existing state', async () => {
             const seed = 'updateTest123';

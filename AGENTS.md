@@ -121,9 +121,14 @@ The app supports shareable URLs for game sessions:
   so later names do not shift onto the wrong player, and each name is
   percent-encoded so a name containing a comma survives. Only *trailing* empty
   names are dropped; decoding pads them back.
-- **After loading**, the app keeps only `?s=<seed>` in the URL. Stripping it
-  entirely would turn a guest into a local host on reload; the volatile state
+- **After loading**, the app keeps only `?s=<seed>` in the URL, for host and
+  guest alike (`setSeedInUrl()`). Without it a reload cannot tell which session
+  the tab belonged to: a guest would become a local host, and a host would start
+  a fresh game and strand its guests on an abandoned session. The volatile state
   comes from the sync API anyway.
+- **Host vs guest on load** is decided by whether `getHostToken(seed)` returns a
+  token for that seed, not by the mere presence of `?s=` - otherwise a host
+  returning to its own session would be demoted to a spectator.
 - **Cross-device sync**: Polling with Vercel KV for state sync across different devices
 - **Same-browser sync**: Uses BroadcastChannel API for syncing across browser tabs
 - **Session utilities** in `src/utils/session.ts`:
@@ -155,6 +160,14 @@ The cross-device sync uses a polling-based approach with Vercel KV:
 **useGameSync Hook** (`src/hooks/useGameSync.ts`):
 - Hosts push state updates to the server after each draw
 - Guests poll the server every 2 seconds for state changes
+- Hosts do **not** poll, but do read the stored state **once on mount**, so a
+  refreshed host resumes the session instead of overwriting it with an empty
+  board. The read is discarded if the host has already written since mount.
+- Host writes are **chained and sequenced**: each carries a strictly increasing
+  `clientSeq` (clock-seeded so it keeps rising across a reload) and waits for
+  the previous write. Two overlapping pushes - a slow draw and then a reset -
+  would otherwise land out of order and the stale draw would resurrect numbers
+  the host had cleared. The server rejects an overtaken write with `409`.
 - Integrates BroadcastChannel for same-browser tab sync
 - Session identity (seed + token) lives in refs and is registered through
   `claimSession()`, so a session created inside an event handler can be pushed
@@ -174,7 +187,8 @@ interface GameState {
     numberOfPlayers?: number;
     cardsPerPlayer?: number;
     playerNames?: string[];
-    hostToken?: string; // Server-only, stripped from every response
+    clientSeq?: number;  // Rejects host writes that a newer one overtook
+    hostToken?: string;  // Server-only, stripped from every response
 }
 ```
 

@@ -111,6 +111,14 @@ describe('NumberDrawer', () => {
             expect(screen.getByText(/Space drücken oder klicken/i)).toBeInTheDocument();
         });
 
+        it('should let a host share a draw-only session that has no cards', () => {
+            // The share control lives in the main button row, not in the cards
+            // panel, so a draw-only session is shareable before any card exists.
+            renderDrawer({ sessionData: SESSION, joinedFromUrl: false, generatedCards: [] });
+
+            expect(screen.getByRole('button', { name: /Spiel teilen/i })).toBeEnabled();
+        });
+
         it('should keep draw and restart enabled for a host', () => {
             renderDrawer({ sessionData: SESSION, joinedFromUrl: false });
 
