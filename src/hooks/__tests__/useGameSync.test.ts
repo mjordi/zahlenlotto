@@ -343,6 +343,31 @@ describe('useGameSync', () => {
             expect(callbacks.onReset).not.toHaveBeenCalled();
         });
 
+        it('should release the host if the read never answers', async () => {
+            // An unreachable API must degrade to local play, not lock the host
+            // out of drawing until the browser's own timeout expires.
+            fetchMock.mockImplementation((_url: string, init?: RequestInit) =>
+                new Promise((_resolve, reject) => {
+                    init?.signal?.addEventListener('abort', () =>
+                        reject(new DOMException('Aborted', 'AbortError'))
+                    );
+                })
+            );
+
+            const { result } = renderSync({
+                seed: 'seedA',
+                hostToken: HOST_TOKEN,
+                isHost: true,
+                hydrateTimeout: 20,
+            });
+
+            expect(result.current.isHydrating).toBe(true);
+
+            await waitFor(() => {
+                expect(result.current.isHydrating).toBe(false);
+            });
+        });
+
         it('should apply a recorded reset instead of stale share-URL numbers', async () => {
             // Host reopens an old full share link after the session was reset:
             // the server's empty-but-timestamped state must win.

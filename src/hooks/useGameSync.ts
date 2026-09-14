@@ -29,6 +29,7 @@ interface UseGameSyncOptions {
     isHost: boolean;
     enabled: boolean;
     pollingInterval?: number; // ms, default 2000
+    hydrateTimeout?: number; // ms, default 5000
     onStateUpdate: (drawnNumbers: number[], currentNumber: number | null) => void;
     onCardConfigUpdate: (config: CardConfig) => void;
     onReset: () => void;
@@ -66,6 +67,7 @@ export function useGameSync({
     isHost,
     enabled,
     pollingInterval = 2000,
+    hydrateTimeout = 5000,
     onStateUpdate,
     onCardConfigUpdate,
     onReset,
@@ -154,9 +156,15 @@ export function useGameSync({
 
         let cancelled = false;
 
+        // Drawing is blocked while this runs, so it must not be able to hang.
+        // An unreachable API has to degrade to local play, never lock the host
+        // out of their own game until the browser's default timeout expires.
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), hydrateTimeout);
+
         (async () => {
             try {
-                const response = await fetch(`/api/session/${seed}`);
+                const response = await fetch(`/api/session/${seed}`, { signal: controller.signal });
                 if (!response.ok) return;
 
                 const state: GameState = await response.json();
@@ -192,14 +200,18 @@ export function useGameSync({
             } catch (error) {
                 console.error('Session hydrate error:', error);
             } finally {
+                clearTimeout(timer);
+                // Always release the host, however this ended
                 if (!cancelled) setIsHydrating(false);
             }
         })();
 
         return () => {
             cancelled = true;
+            clearTimeout(timer);
+            controller.abort();
         };
-    }, [seed, isHost, enabled]);
+    }, [seed, isHost, enabled, hydrateTimeout]);
 
     // Poll for updates (guests only)
     useEffect(() => {

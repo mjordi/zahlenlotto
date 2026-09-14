@@ -178,7 +178,9 @@ The cross-device sync uses a polling-based approach with Vercel KV:
   board. Drawing is blocked (`isHydrating`) until that read finishes: a draw
   computed from the pre-hydration board would overwrite the very history the
   refresh is resuming. The read is also discarded once a write has been
-  *queued* - not merely completed - for the same reason.
+  *queued* - not merely completed - for the same reason. It is bounded by
+  `hydrateTimeout` (5s) and always releases the host: an unreachable API has to
+  degrade to local play, never lock the host out of their own game.
 - The mount read honours a recorded reset: an empty state with `lastUpdate > 0`
   invokes `onReset`, so a host reopening an older full share URL does not
   resurrect the numbers that link still carries.
