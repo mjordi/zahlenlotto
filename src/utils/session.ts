@@ -29,16 +29,67 @@ export interface SyncMessage {
     currentNumber?: number | null;
 }
 
+const SEED_CHARS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+
 /**
  * Generates a random alphanumeric session seed.
  */
 export function generateSessionSeed(): string {
-    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
     let result = '';
     for (let i = 0; i < 8; i++) {
-        result += chars.charAt(Math.floor(Math.random() * chars.length));
+        result += SEED_CHARS.charAt(Math.floor(Math.random() * SEED_CHARS.length));
     }
     return result;
+}
+
+/** Minimum length the API accepts for a host token. */
+export const HOST_TOKEN_LENGTH = 32;
+
+const HOST_TOKEN_STORAGE_PREFIX = 'zahlenlotto-host-';
+
+/**
+ * Generates the secret token that proves ownership of a session.
+ * This is never part of a shareable URL - only the host holds it.
+ */
+export function generateHostToken(): string {
+    const cryptoObj = typeof globalThis !== 'undefined' ? globalThis.crypto : undefined;
+
+    if (cryptoObj?.getRandomValues) {
+        const bytes = new Uint8Array(HOST_TOKEN_LENGTH);
+        cryptoObj.getRandomValues(bytes);
+        return Array.from(bytes, b => SEED_CHARS.charAt(b % SEED_CHARS.length)).join('');
+    }
+
+    let result = '';
+    for (let i = 0; i < HOST_TOKEN_LENGTH; i++) {
+        result += SEED_CHARS.charAt(Math.floor(Math.random() * SEED_CHARS.length));
+    }
+    return result;
+}
+
+/**
+ * Persists the host token so a host keeps control of the session across reloads.
+ * Uses sessionStorage so the token never outlives the browser tab.
+ */
+export function storeHostToken(seed: string, token: string): void {
+    if (typeof window === 'undefined') return;
+    try {
+        window.sessionStorage.setItem(HOST_TOKEN_STORAGE_PREFIX + seed, token);
+    } catch {
+        // Storage can be unavailable (private mode, blocked cookies) - sync still works in-memory
+    }
+}
+
+/**
+ * Reads a previously stored host token for a session, if any.
+ */
+export function getHostToken(seed: string): string | null {
+    if (typeof window === 'undefined') return null;
+    try {
+        return window.sessionStorage.getItem(HOST_TOKEN_STORAGE_PREFIX + seed);
+    } catch {
+        return null;
+    }
 }
 
 /**
@@ -162,6 +213,47 @@ function decodeDrawnNumbers(str: string): number[] {
 }
 
 /**
+ * Encodes player names positionally so each name stays with its player.
+ * Names are percent-encoded individually so a name containing a comma survives.
+ * Trailing empty names are dropped to keep URLs short; decoding pads them back.
+ * Returns null when there is nothing worth encoding.
+ */
+function encodePlayerNames(names: string[]): string | null {
+    const trimmed = [...names];
+    while (trimmed.length > 0 && trimmed[trimmed.length - 1].trim() === '') {
+        trimmed.pop();
+    }
+
+    if (trimmed.length === 0) return null;
+
+    return trimmed.map(name => encodeURIComponent(name)).join(',');
+}
+
+/**
+ * Decodes player names back into exactly `count` positional slots.
+ */
+function decodePlayerNames(str: string, count: number): string[] {
+    const parts = str.split(',');
+    const names: string[] = [];
+
+    for (let i = 0; i < count; i++) {
+        const part = parts[i];
+        if (part === undefined) {
+            names.push('');
+            continue;
+        }
+        try {
+            names.push(decodeURIComponent(part));
+        } catch {
+            // Malformed percent-encoding - fall back to the raw value
+            names.push(part);
+        }
+    }
+
+    return names;
+}
+
+/**
  * Encodes session data into URL search params.
  */
 export function encodeSessionToParams(session: SessionData): URLSearchParams {
@@ -178,11 +270,10 @@ export function encodeSessionToParams(session: SessionData): URLSearchParams {
         params.set('p', session.numberOfPlayers.toString());
         params.set('c', session.cardsPerPlayer.toString());
 
-        // Only include non-empty player names
         if (session.playerNames) {
-            const nonEmptyNames = session.playerNames.filter(name => name.trim() !== '');
-            if (nonEmptyNames.length > 0) {
-                params.set('n', nonEmptyNames.join(','));
+            const encodedNames = encodePlayerNames(session.playerNames);
+            if (encodedNames !== null) {
+                params.set('n', encodedNames);
             }
         }
     }
@@ -229,18 +320,9 @@ export function decodeSessionFromParams(params: URLSearchParams): SessionData | 
                 numberOfPlayers = undefined;
                 cardsPerPlayer = undefined;
             } else {
-                // Parse player names
-                playerNames = [];
-                if (namesStr) {
-                    const names = namesStr.split(',');
-                    for (let i = 0; i < numberOfPlayers; i++) {
-                        playerNames.push(names[i] || '');
-                    }
-                } else {
-                    for (let i = 0; i < numberOfPlayers; i++) {
-                        playerNames.push('');
-                    }
-                }
+                playerNames = namesStr
+                    ? decodePlayerNames(namesStr, numberOfPlayers)
+                    : Array(numberOfPlayers).fill('');
             }
         }
     }

@@ -28,6 +28,8 @@ A modern web application for generating traditional 90-number Tombola/Bingo card
 - All players get the **same cards and drawn numbers** from a shared link
 - **Cross-device real-time sync** via polling with Vercel KV
 - **Same-browser tab sync** via BroadcastChannel API
+- **Host controls the game**: only the host draws, resets and generates cards -
+  guests follow along read-only, enforced by a host token the share link never contains
 - Session data encoded in URL (seed, drawn numbers, cards config)
 - One-click copy to clipboard
 

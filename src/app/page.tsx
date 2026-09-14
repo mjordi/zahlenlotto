@@ -53,8 +53,11 @@ export default function Home() {
                 setGeneratedCards(cards);
             }
 
-            // Clear URL params after loading to keep URL clean during gameplay
-            window.history.replaceState({}, '', window.location.pathname);
+            // Keep only the seed in the URL: it keeps a reload in the same session
+            // (instead of starting a new local game), while the volatile state -
+            // drawn numbers and card config - comes from the sync API.
+            const seedParam = new URLSearchParams({ s: urlSession.seed });
+            window.history.replaceState({}, '', `${window.location.pathname}?${seedParam}`);
         }
     }, [t.playerLabel]);
 

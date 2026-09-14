@@ -3,61 +3,50 @@
  * Tests the core logic using mocks since Next.js Web APIs aren't available in Jest.
  */
 
-// Mock fetch for the API
-global.fetch = jest.fn();
-
-// Replace NextRequest globally for tests - mock must be defined inline
-jest.mock('next/server', () => {
-    class MockNextRequest {
-        private _body: string | undefined;
-        private _method: string;
-
-        constructor(url: string | URL, init?: { method?: string; body?: string }) {
-            this._method = init?.method || 'GET';
-            this._body = init?.body;
-        }
-
-        async json() {
-            return this._body ? JSON.parse(this._body) : {};
-        }
-    }
-
-    return {
-        NextRequest: MockNextRequest,
-        NextResponse: {
-            json: (data: unknown, init?: { status?: number }) => ({
-                status: init?.status || 200,
-                json: async () => data,
-            }),
-        },
-    };
-});
+// Replace NextResponse for tests - the factory must be self-contained (hoisted)
+jest.mock('next/server', () => ({
+    NextResponse: {
+        json: (data: unknown, init?: { status?: number }) => ({
+            status: init?.status || 200,
+            json: async () => data,
+        }),
+    },
+}));
 
 // Import the route after mocks are set up
-import { GET, POST, DELETE } from '../[seed]/route';
+import { GET, POST } from '../[seed]/route';
+
+const HOST_TOKEN = 'host-token-for-tests-0123456789';
+const OTHER_TOKEN = 'another-token-entirely-987654321';
 
 // Helper to create params
 function createParams(seed: string): { params: Promise<{ seed: string }> } {
     return { params: Promise.resolve({ seed }) };
 }
 
-// Mock request helper - creates object with json method
-function createMockRequest(body?: object) {
+/** Minimal request stand-in: the route only uses json() and headers.get(). */
+function createMockRequest(body?: object, headers: Record<string, string> = {}) {
     return {
         json: async () => body || {},
+        headers: {
+            get: (name: string) => headers[name.toLowerCase()] ?? null,
+        },
     };
 }
 
-describe('Session API Route', () => {
-    beforeEach(() => {
-        // Clear any cached state between tests
-        jest.clearAllMocks();
-    });
+function hostRequest(body?: object, token: string = HOST_TOKEN) {
+    return createMockRequest(body, { 'x-host-token': token });
+}
 
+async function getState(seed: string) {
+    const response = await GET(createMockRequest() as never, createParams(seed));
+    return response.json();
+}
+
+describe('Session API Route', () => {
     describe('GET /api/session/[seed]', () => {
         it('should return empty state for new session', async () => {
-            const request = createMockRequest();
-            const response = await GET(request as never, createParams('newSeed123'));
+            const response = await GET(createMockRequest() as never, createParams('newSeed123'));
             const data = await response.json();
 
             expect(response.status).toBe(200);
@@ -67,98 +56,262 @@ describe('Session API Route', () => {
         });
 
         it('should return 400 for invalid seed (too short)', async () => {
-            const request = createMockRequest();
-            const response = await GET(request as never, createParams('abc'));
+            const response = await GET(createMockRequest() as never, createParams('abc'));
 
             expect(response.status).toBe(400);
             const data = await response.json();
             expect(data.error).toBe('Invalid seed');
+        });
+
+        it('should never expose the host token', async () => {
+            const seed = 'tokenLeakTest';
+            await POST(hostRequest({ drawnNumbers: [7], currentNumber: 7 }) as never, createParams(seed));
+
+            const data = await getState(seed);
+            expect(data.hostToken).toBeUndefined();
         });
     });
 
     describe('POST /api/session/[seed]', () => {
         it('should save game state', async () => {
             const seed = 'postTest123';
-            const postRequest = createMockRequest({
-                drawnNumbers: [1, 42, 88],
-                currentNumber: 88,
-            });
+            const postResponse = await POST(
+                hostRequest({ drawnNumbers: [1, 42, 88], currentNumber: 88 }) as never,
+                createParams(seed)
+            );
 
-            const postResponse = await POST(postRequest as never, createParams(seed));
             expect(postResponse.status).toBe(200);
             const postData = await postResponse.json();
             expect(postData.ok).toBe(true);
             expect(postData.lastUpdate).toBeGreaterThan(0);
 
-            // Verify saved state with GET
-            const getRequest = createMockRequest();
-            const getResponse = await GET(getRequest as never, createParams(seed));
-            const getData = await getResponse.json();
-
+            const getData = await getState(seed);
             expect(getData.drawnNumbers).toEqual([1, 42, 88]);
             expect(getData.currentNumber).toBe(88);
         });
 
         it('should return 400 for invalid request body', async () => {
-            const request = createMockRequest({ invalid: 'data' });
+            const response = await POST(
+                hostRequest({ invalid: 'data' }) as never,
+                createParams('test456')
+            );
 
-            const response = await POST(request as never, createParams('test456'));
             expect(response.status).toBe(400);
             const data = await response.json();
             expect(data.error).toBe('Invalid request body');
         });
 
         it('should return 400 for invalid drawn numbers (out of range)', async () => {
-            const request = createMockRequest({
-                drawnNumbers: [0, 91],
-                currentNumber: null,
-            });
+            const response = await POST(
+                hostRequest({ drawnNumbers: [0, 91], currentNumber: null }) as never,
+                createParams('test789')
+            );
 
-            const response = await POST(request as never, createParams('test789'));
             expect(response.status).toBe(400);
             const data = await response.json();
             expect(data.error).toBe('Invalid drawn numbers');
         });
 
         it('should return 400 for short seed', async () => {
-            const request = createMockRequest({ drawnNumbers: [1], currentNumber: 1 });
+            const response = await POST(
+                hostRequest({ drawnNumbers: [1], currentNumber: 1 }) as never,
+                createParams('ab')
+            );
 
-            const response = await POST(request as never, createParams('ab'));
             expect(response.status).toBe(400);
         });
     });
 
-    describe('DELETE /api/session/[seed]', () => {
-        it('should delete game state', async () => {
-            const seed = 'deleteTest123';
+    describe('Host authorization', () => {
+        it('should reject writes without a host token', async () => {
+            const response = await POST(
+                createMockRequest({ drawnNumbers: [1], currentNumber: 1 }) as never,
+                createParams('noTokenSession')
+            );
 
-            // First create a session
-            const postRequest = createMockRequest({
-                drawnNumbers: [1, 2, 3],
-                currentNumber: 3,
-            });
-            await POST(postRequest as never, createParams(seed));
-
-            // Delete it
-            const deleteRequest = createMockRequest();
-            const deleteResponse = await DELETE(deleteRequest as never, createParams(seed));
-            expect(deleteResponse.status).toBe(200);
-            const deleteData = await deleteResponse.json();
-            expect(deleteData.ok).toBe(true);
-
-            // Verify it's deleted (returns empty state)
-            const getRequest = createMockRequest();
-            const getResponse = await GET(getRequest as never, createParams(seed));
-            const getData = await getResponse.json();
-
-            expect(getData.drawnNumbers).toEqual([]);
+            expect(response.status).toBe(401);
+            const data = await response.json();
+            expect(data.error).toBe('Missing host token');
         });
 
-        it('should return 400 for invalid seed', async () => {
-            const request = createMockRequest();
-            const response = await DELETE(request as never, createParams('xy'));
+        it('should reject a token that is too short to be a real secret', async () => {
+            const response = await POST(
+                hostRequest({ drawnNumbers: [1], currentNumber: 1 }, 'short') as never,
+                createParams('shortTokenSession')
+            );
 
-            expect(response.status).toBe(400);
+            expect(response.status).toBe(401);
+        });
+
+        it('should reject writes from a guest who did not claim the session', async () => {
+            const seed = 'claimedSession1';
+
+            // Host claims the session
+            await POST(
+                hostRequest({ drawnNumbers: [1], currentNumber: 1 }) as never,
+                createParams(seed)
+            );
+
+            // Someone else with the share link tries to forge a draw
+            const forged = await POST(
+                hostRequest({ drawnNumbers: [1, 2, 3], currentNumber: 3 }, OTHER_TOKEN) as never,
+                createParams(seed)
+            );
+
+            expect(forged.status).toBe(403);
+            const data = await forged.json();
+            expect(data.error).toBe('Not the session host');
+
+            // State is untouched
+            const state = await getState(seed);
+            expect(state.drawnNumbers).toEqual([1]);
+        });
+
+        it('should allow the claiming host to keep writing', async () => {
+            const seed = 'claimedSession2';
+
+            await POST(hostRequest({ drawnNumbers: [1], currentNumber: 1 }) as never, createParams(seed));
+            const second = await POST(
+                hostRequest({ drawnNumbers: [1, 2], currentNumber: 2 }) as never,
+                createParams(seed)
+            );
+
+            expect(second.status).toBe(200);
+            const state = await getState(seed);
+            expect(state.drawnNumbers).toEqual([1, 2]);
+        });
+    });
+
+    describe('Card configuration sync', () => {
+        it('should save and return card configuration', async () => {
+            const seed = 'cardConfig123';
+            const postResponse = await POST(
+                hostRequest({
+                    drawnNumbers: [1, 2, 3],
+                    currentNumber: 3,
+                    numberOfPlayers: 2,
+                    cardsPerPlayer: 3,
+                    playerNames: ['Alice', 'Bob'],
+                }) as never,
+                createParams(seed)
+            );
+            expect(postResponse.status).toBe(200);
+
+            const getData = await getState(seed);
+            expect(getData.numberOfPlayers).toBe(2);
+            expect(getData.cardsPerPlayer).toBe(3);
+            expect(getData.playerNames).toEqual(['Alice', 'Bob']);
+        });
+
+        it('should preserve card configuration across plain draw updates', async () => {
+            const seed = 'cardConfigPersist';
+
+            await POST(
+                hostRequest({
+                    drawnNumbers: [],
+                    currentNumber: null,
+                    numberOfPlayers: 2,
+                    cardsPerPlayer: 3,
+                    playerNames: ['Alice', 'Bob'],
+                }) as never,
+                createParams(seed)
+            );
+
+            // A later draw carries no card config - it must not wipe the stored one
+            await POST(
+                hostRequest({ drawnNumbers: [7], currentNumber: 7 }) as never,
+                createParams(seed)
+            );
+
+            const state = await getState(seed);
+            expect(state.drawnNumbers).toEqual([7]);
+            expect(state.numberOfPlayers).toBe(2);
+            expect(state.cardsPerPlayer).toBe(3);
+            expect(state.playerNames).toEqual(['Alice', 'Bob']);
+        });
+
+        it('should validate numberOfPlayers range', async () => {
+            const seed = 'cardConfigRange1';
+            await POST(
+                hostRequest({
+                    drawnNumbers: [1],
+                    currentNumber: 1,
+                    numberOfPlayers: 0,
+                    cardsPerPlayer: 3,
+                }) as never,
+                createParams(seed)
+            );
+
+            const state = await getState(seed);
+            expect(state.numberOfPlayers).toBeUndefined();
+        });
+
+        it('should validate cardsPerPlayer range', async () => {
+            const seed = 'cardConfigRange2';
+            await POST(
+                hostRequest({
+                    drawnNumbers: [1],
+                    currentNumber: 1,
+                    numberOfPlayers: 2,
+                    cardsPerPlayer: 15,
+                }) as never,
+                createParams(seed)
+            );
+
+            const state = await getState(seed);
+            expect(state.numberOfPlayers).toBe(2);
+            expect(state.cardsPerPlayer).toBeUndefined();
+        });
+    });
+
+    describe('Reset propagation', () => {
+        it('should store a reset as an empty but freshly timestamped state', async () => {
+            const seed = 'resetSession123';
+
+            const first = await POST(
+                hostRequest({ drawnNumbers: [1, 2, 3], currentNumber: 3 }) as never,
+                createParams(seed)
+            );
+            const firstUpdate = (await first.json()).lastUpdate;
+
+            const reset = await POST(
+                hostRequest({ drawnNumbers: [], currentNumber: null }) as never,
+                createParams(seed)
+            );
+            expect(reset.status).toBe(200);
+
+            const state = await getState(seed);
+            expect(state.drawnNumbers).toEqual([]);
+            expect(state.currentNumber).toBeNull();
+            // A guest detects the reset by the timestamp moving forward,
+            // which a deleted key (lastUpdate: 0) would never do.
+            expect(state.lastUpdate).toBeGreaterThanOrEqual(firstUpdate);
+            expect(state.lastUpdate).toBeGreaterThan(0);
+        });
+
+        it('should keep generated cards through a reset', async () => {
+            const seed = 'resetKeepsCards';
+
+            await POST(
+                hostRequest({
+                    drawnNumbers: [5],
+                    currentNumber: 5,
+                    numberOfPlayers: 3,
+                    cardsPerPlayer: 2,
+                    playerNames: ['A', 'B', 'C'],
+                }) as never,
+                createParams(seed)
+            );
+
+            await POST(
+                hostRequest({ drawnNumbers: [], currentNumber: null }) as never,
+                createParams(seed)
+            );
+
+            const state = await getState(seed);
+            expect(state.drawnNumbers).toEqual([]);
+            expect(state.numberOfPlayers).toBe(3);
+            expect(state.playerNames).toEqual(['A', 'B', 'C']);
         });
     });
 
@@ -166,91 +319,15 @@ describe('Session API Route', () => {
         it('should update existing state', async () => {
             const seed = 'updateTest123';
 
-            // Create initial state
-            const request1 = createMockRequest({
-                drawnNumbers: [1],
-                currentNumber: 1,
-            });
-            await POST(request1 as never, createParams(seed));
+            await POST(hostRequest({ drawnNumbers: [1], currentNumber: 1 }) as never, createParams(seed));
+            await POST(
+                hostRequest({ drawnNumbers: [1, 2, 3], currentNumber: 3 }) as never,
+                createParams(seed)
+            );
 
-            // Update state
-            const request2 = createMockRequest({
-                drawnNumbers: [1, 2, 3],
-                currentNumber: 3,
-            });
-            await POST(request2 as never, createParams(seed));
-
-            // Verify updated state
-            const getRequest = createMockRequest();
-            const response = await GET(getRequest as never, createParams(seed));
-            const data = await response.json();
-
-            expect(data.drawnNumbers).toEqual([1, 2, 3]);
-            expect(data.currentNumber).toBe(3);
-        });
-    });
-
-    describe('Card configuration sync', () => {
-        it('should save and return card configuration', async () => {
-            const seed = 'cardConfig123';
-            const postRequest = createMockRequest({
-                drawnNumbers: [1, 2, 3],
-                currentNumber: 3,
-                numberOfPlayers: 2,
-                cardsPerPlayer: 3,
-                playerNames: ['Alice', 'Bob'],
-            });
-
-            const postResponse = await POST(postRequest as never, createParams(seed));
-            expect(postResponse.status).toBe(200);
-
-            // Verify card config is returned with GET
-            const getRequest = createMockRequest();
-            const getResponse = await GET(getRequest as never, createParams(seed));
-            const getData = await getResponse.json();
-
-            expect(getData.numberOfPlayers).toBe(2);
-            expect(getData.cardsPerPlayer).toBe(3);
-            expect(getData.playerNames).toEqual(['Alice', 'Bob']);
-        });
-
-        it('should validate numberOfPlayers range', async () => {
-            const seed = 'cardConfigRange1';
-            // numberOfPlayers = 0 should be ignored
-            const postRequest = createMockRequest({
-                drawnNumbers: [1],
-                currentNumber: 1,
-                numberOfPlayers: 0,
-                cardsPerPlayer: 3,
-            });
-
-            await POST(postRequest as never, createParams(seed));
-
-            const getRequest = createMockRequest();
-            const getResponse = await GET(getRequest as never, createParams(seed));
-            const getData = await getResponse.json();
-
-            expect(getData.numberOfPlayers).toBeUndefined();
-        });
-
-        it('should validate cardsPerPlayer range', async () => {
-            const seed = 'cardConfigRange2';
-            // cardsPerPlayer = 15 should be ignored (max is 10)
-            const postRequest = createMockRequest({
-                drawnNumbers: [1],
-                currentNumber: 1,
-                numberOfPlayers: 2,
-                cardsPerPlayer: 15,
-            });
-
-            await POST(postRequest as never, createParams(seed));
-
-            const getRequest = createMockRequest();
-            const getResponse = await GET(getRequest as never, createParams(seed));
-            const getData = await getResponse.json();
-
-            expect(getData.numberOfPlayers).toBe(2);
-            expect(getData.cardsPerPlayer).toBeUndefined();
+            const state = await getState(seed);
+            expect(state.drawnNumbers).toEqual([1, 2, 3]);
+            expect(state.currentNumber).toBe(3);
         });
     });
 });

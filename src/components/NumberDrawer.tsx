@@ -11,8 +11,11 @@ import {
     generateSessionSeed,
     generateLottoCardWithSeed,
     createShareableUrl,
+    generateHostToken,
+    storeHostToken,
+    getHostToken,
 } from '@/utils/session';
-import { useGameSync } from '@/hooks/useGameSync';
+import { useGameSync, type CardConfig } from '@/hooks/useGameSync';
 
 interface NumberDrawerProps {
     drawnNumbers: number[];
@@ -47,6 +50,7 @@ export default function NumberDrawer({
     const audioCtxRef = useRef<AudioContext | null>(null);
     const { t } = useLanguage();
     const previousDrawnRef = useRef<number[]>([]);
+    const hasBaselinedRowsRef = useRef(false);
 
     // Card generation state
     const [numberOfPlayers, setNumberOfPlayers] = useState(2);
@@ -61,6 +65,9 @@ export default function NumberDrawer({
 
     // Track if we are the host (who started the session)
     const [isHost, setIsHost] = useState(!joinedFromUrl);
+
+    // Secret that proves session ownership to the API. Hosts only - never shared.
+    const [hostToken, setHostToken] = useState<string | null>(null);
 
     // Sync isHost with joinedFromUrl prop (handles async URL detection)
     useEffect(() => {
@@ -92,8 +99,9 @@ export default function NumberDrawer({
     }, [t.playerLabel]);
 
     // Cross-device sync using the API + BroadcastChannel
-    const { pushState, pushCardConfig, resetState } = useGameSync({
+    const { claimSession, pushState, pushCardConfig, resetState, syncUnavailable } = useGameSync({
         seed: sessionData?.seed || null,
+        hostToken,
         isHost,
         enabled: !!sessionData?.seed,
         pollingInterval: 2000,
@@ -101,7 +109,7 @@ export default function NumberDrawer({
             setDrawnNumbers(numbers);
             setCurrentNumber(current);
         }, [setDrawnNumbers, setCurrentNumber]),
-        onCardConfigUpdate: useCallback((config: { numberOfPlayers: number; cardsPerPlayer: number; playerNames: string[] }) => {
+        onCardConfigUpdate: useCallback((config: CardConfig) => {
             // Only update cards if we're a guest and don't already have cards
             const seed = sessionData?.seed;
             if (!isHost && seed && generatedCards.length === 0) {
@@ -122,6 +130,25 @@ export default function NumberDrawer({
             setCurrentNumber(null);
         }, [setDrawnNumbers, setCurrentNumber]),
     });
+
+    /**
+     * Makes sure we hold a seed and host token before pushing to the server.
+     * Registers both with the sync hook immediately, because a push can happen
+     * before React re-renders with the newly created session.
+     */
+    const ensureHostSession = useCallback(() => {
+        const existingSeed = sessionData?.seed;
+        const seed = existingSeed ?? generateSessionSeed();
+        const token = hostToken ?? getHostToken(seed) ?? generateHostToken();
+
+        if (token !== hostToken) {
+            storeHostToken(seed, token);
+            setHostToken(token);
+        }
+        claimSession(seed, token);
+
+        return { seed, isNew: !existingSeed };
+    }, [sessionData, hostToken, claimSession]);
 
     // Audio Context initialisieren
     const initAudio = useCallback(() => {
@@ -239,7 +266,7 @@ export default function NumberDrawer({
     // Zahl ziehen (only host can draw)
     const drawNumber = useCallback(() => {
         // Guests cannot draw numbers
-        if (!isHost && sessionData) return;
+        if (!isHost) return;
 
         if (drawnNumbers.length >= TOTAL_NUMBERS || isAnimating) return;
 
@@ -250,15 +277,10 @@ export default function NumberDrawer({
 
         if (availableNumbers.length === 0) return;
 
-        // Create a session if this is the first draw and no session exists
-        if (!sessionData) {
-            const seed = generateSessionSeed();
-            const newSession: SessionData = {
-                seed,
-                drawnNumbers: [],
-            };
-            setSessionData(newSession);
-            setIsHost(true);
+        // Claim the session (creating one on the first draw) before pushing
+        const { seed, isNew } = ensureHostSession();
+        if (isNew) {
+            setSessionData({ seed, drawnNumbers: [] });
         }
 
         initAudio();
@@ -278,13 +300,28 @@ export default function NumberDrawer({
             // Sound abspielen
             playSound(523.25 + (randomNumber * 5), 0.2);
 
-            // Check for row completion
-            checkRowCompletion(newDrawnNumbers);
-
             // Just-drawn Animation entfernen
             setTimeout(() => setJustDrawn(null), 500);
         }, 300);
-    }, [drawnNumbers, isAnimating, initAudio, playSound, setCurrentNumber, setDrawnNumbers, checkRowCompletion, sessionData, setSessionData, pushState, isHost]);
+    }, [drawnNumbers, isAnimating, initAudio, playSound, setCurrentNumber, setDrawnNumbers, setSessionData, pushState, isHost, ensureHostSession]);
+
+    /**
+     * Row completion runs off the drawn numbers themselves, so guests receiving
+     * numbers through sync get the same highlighting, confetti and celebration.
+     * The first run only records a baseline: numbers drawn before we joined (or
+     * before the cards existed) must not trigger a celebration on arrival.
+     */
+    useEffect(() => {
+        if (generatedCards.length === 0) return;
+
+        if (!hasBaselinedRowsRef.current) {
+            hasBaselinedRowsRef.current = true;
+            previousDrawnRef.current = drawnNumbers;
+            return;
+        }
+
+        checkRowCompletion(drawnNumbers);
+    }, [drawnNumbers, generatedCards, checkRowCompletion]);
 
     // Reset mit Bestätigung (only host can reset)
     const reset = useCallback(() => {
@@ -305,8 +342,9 @@ export default function NumberDrawer({
         previousDrawnRef.current = [];
 
         // Reset state on server (also broadcasts to same-browser tabs)
+        ensureHostSession();
         resetState();
-    }, [drawnNumbers.length, t.confirmRestart, setDrawnNumbers, setCurrentNumber, resetState, isHost]);
+    }, [drawnNumbers.length, t.confirmRestart, setDrawnNumbers, setCurrentNumber, resetState, isHost, ensureHostSession]);
 
     // Tastatursteuerung (draw/reset only work for host)
     useEffect(() => {
@@ -351,8 +389,9 @@ export default function NumberDrawer({
     const generateCards = useCallback(() => {
         setIsGenerating(true);
         setTimeout(() => {
-            // Generate a new session seed (or reuse existing if already in a draw-only session)
-            const seed = sessionData?.seed || generateSessionSeed();
+            // Claim the session first (reusing the seed of a draw-only session),
+            // so the card config push below targets the right session.
+            const { seed } = ensureHostSession();
             const trimmedNames = playerNames.slice(0, numberOfPlayers);
             const newSession: SessionData = {
                 seed,
@@ -375,7 +414,7 @@ export default function NumberDrawer({
                 currentNumber
             );
         }, 100);
-    }, [numberOfPlayers, cardsPerPlayer, playerNames, setGeneratedCards, setSessionData, sessionData?.seed, drawnNumbers, currentNumber, generateCardsFromConfig, pushCardConfig]);
+    }, [numberOfPlayers, cardsPerPlayer, playerNames, setGeneratedCards, setSessionData, drawnNumbers, currentNumber, generateCardsFromConfig, pushCardConfig, ensureHostSession]);
 
     // Export to PDF function
     const exportToPDF = useCallback(() => {
@@ -447,6 +486,21 @@ export default function NumberDrawer({
                             : `${drawnNumbers.length}${t.nthDrawing}`
                     }
                 </div>
+
+                {/* Sync failure - surfaced so a misconfigured deployment is not silent */}
+                {syncUnavailable && sessionData && (
+                    <div
+                        className="mb-4 inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-red-500/20 text-red-300 border border-red-500/30"
+                        role="status"
+                    >
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                            <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
+                            <line x1="12" y1="9" x2="12" y2="13"></line>
+                            <line x1="12" y1="17" x2="12.01" y2="17"></line>
+                        </svg>
+                        <span className="text-sm font-medium">{t.syncUnavailable}</span>
+                    </div>
+                )}
 
                 {/* Spectator Mode Indicator */}
                 {!isHost && sessionData && (

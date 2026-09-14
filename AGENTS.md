@@ -117,6 +117,13 @@ The app supports shareable URLs for game sessions:
 - **Example URLs**:
   - With cards: `https://example.com/?s=abc12345&d=1,42,88&p=2&c=3&n=Alice,Bob`
   - Draw-only: `https://example.com/?s=abc12345&d=1,42,88`
+- **Player names are positional**: empty names are kept in place (`Alice,,Charlie`)
+  so later names do not shift onto the wrong player, and each name is
+  percent-encoded so a name containing a comma survives. Only *trailing* empty
+  names are dropped; decoding pads them back.
+- **After loading**, the app keeps only `?s=<seed>` in the URL. Stripping it
+  entirely would turn a guest into a local host on reload; the volatile state
+  comes from the sync API anyway.
 - **Cross-device sync**: Polling with Vercel KV for state sync across different devices
 - **Same-browser sync**: Uses BroadcastChannel API for syncing across browser tabs
 - **Session utilities** in `src/utils/session.ts`:
@@ -132,15 +139,31 @@ The app supports shareable URLs for game sessions:
 The cross-device sync uses a polling-based approach with Vercel KV:
 
 **API Route** (`src/app/api/session/[seed]/route.ts`):
-- `GET /api/session/[seed]`: Poll for current game state
-- `POST /api/session/[seed]`: Update game state (host only)
-- `DELETE /api/session/[seed]`: Reset/clear game state
+- `GET /api/session/[seed]`: Poll for current game state. Public (anyone with the
+  share link), and never returns the host token.
+- `POST /api/session/[seed]`: Update game state. Requires the `x-host-token`
+  header. Card configuration is **merged**, so a plain draw update keeps the
+  stored cards.
+
+**Host authorization**:
+- The host generates a secret token (`generateHostToken()`) alongside the seed
+  and keeps it in `sessionStorage` - it is **never** part of a shareable URL.
+- The first `POST` for a seed claims the session with that token; later writes
+  must present the same token or get a `403`.
+- Client-side guest restrictions are UX only - the token is the actual boundary.
 
 **useGameSync Hook** (`src/hooks/useGameSync.ts`):
-- Hosts push state updates to server after each draw
-- Guests poll server every 2 seconds for state changes
+- Hosts push state updates to the server after each draw
+- Guests poll the server every 2 seconds for state changes
 - Integrates BroadcastChannel for same-browser tab sync
-- Falls back to in-memory storage during development (when Vercel KV not configured)
+- Session identity (seed + token) lives in refs and is registered through
+  `claimSession()`, so a session created inside an event handler can be pushed
+  to immediately, before React re-renders
+- A **reset is stored as an empty, freshly timestamped state**, not a delete: a
+  deleted key reads back as `lastUpdate: 0`, which guests can never distinguish
+  from "no state yet", so the reset would never propagate
+- `lastUpdate: 0` means the server holds no state - guests keep whatever they
+  restored from the share URL instead of clearing it
 
 **State Structure**:
 ```typescript
@@ -148,12 +171,20 @@ interface GameState {
     drawnNumbers: number[];
     currentNumber: number | null;
     lastUpdate: number; // Timestamp for change detection
+    numberOfPlayers?: number;
+    cardsPerPlayer?: number;
+    playerNames?: string[];
+    hostToken?: string; // Server-only, stripped from every response
 }
 ```
 
 **Environment Variables** (for Vercel KV in production):
 - `KV_REST_API_URL`: Vercel KV REST API URL
 - `KV_REST_API_TOKEN`: Vercel KV authentication token
+
+The in-memory fallback is **development only**. It is per-process, so it cannot
+work across serverless instances; in production a missing KV configuration
+returns `503` and the UI shows a sync warning rather than silently desyncing.
 
 ### 7. Git Workflow
 

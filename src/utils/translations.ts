@@ -92,6 +92,7 @@ export interface Translations {
     spectatorMode: string;
     hostOnly: string;
     waitingForCards: string;
+    syncUnavailable: string;
 }
 
 export const translations: Record<Language, Translations> = {
@@ -180,6 +181,7 @@ export const translations: Record<Language, Translations> = {
         spectatorMode: 'Zuschauermodus',
         hostOnly: 'Nur der Gastgeber kann Zahlen ziehen',
         waitingForCards: 'Warten auf Karten vom Gastgeber...',
+        syncUnavailable: 'Synchronisierung nicht verfügbar - andere Geräte sehen diese Ziehung nicht.',
     },
 
     en: {
@@ -267,6 +269,7 @@ export const translations: Record<Language, Translations> = {
         spectatorMode: 'Spectator Mode',
         hostOnly: 'Only the host can draw numbers',
         waitingForCards: 'Waiting for cards from host...',
+        syncUnavailable: 'Sync unavailable - other devices will not see this draw.',
     },
 
     fr: {
@@ -354,6 +357,7 @@ export const translations: Record<Language, Translations> = {
         spectatorMode: 'Mode Spectateur',
         hostOnly: "Seul l'hôte peut tirer les numéros",
         waitingForCards: "En attente des cartes de l'hôte...",
+        syncUnavailable: "Synchronisation indisponible - les autres appareils ne verront pas ce tirage.",
     },
 
     it: {
@@ -441,6 +445,7 @@ export const translations: Record<Language, Translations> = {
         spectatorMode: 'Modalità Spettatore',
         hostOnly: "Solo l'host può estrarre numeri",
         waitingForCards: "In attesa delle cartelle dall'host...",
+        syncUnavailable: "Sincronizzazione non disponibile - gli altri dispositivi non vedranno questa estrazione.",
     },
 };
 

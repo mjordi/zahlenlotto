@@ -4,6 +4,10 @@ import {
     encodeSessionToParams,
     decodeSessionFromParams,
     createShareableUrl,
+    generateHostToken,
+    storeHostToken,
+    getHostToken,
+    HOST_TOKEN_LENGTH,
     SessionData,
 } from '../session';
 
@@ -169,7 +173,7 @@ describe('session utilities', () => {
             expect(params.has('n')).toBe(false);
         });
 
-        it('should only include non-empty names', () => {
+        it('should keep empty names in place so later names do not shift', () => {
             const session: SessionData = {
                 seed: 'test123',
                 drawnNumbers: [],
@@ -179,7 +183,41 @@ describe('session utilities', () => {
             };
 
             const params = encodeSessionToParams(session);
-            expect(params.get('n')).toBe('Alice,Charlie');
+            expect(params.get('n')).toBe('Alice,,Charlie');
+
+            const decoded = decodeSessionFromParams(params);
+            expect(decoded!.playerNames).toEqual(['Alice', '', 'Charlie']);
+        });
+
+        it('should drop trailing empty names to keep URLs short', () => {
+            const session: SessionData = {
+                seed: 'test123',
+                drawnNumbers: [],
+                numberOfPlayers: 4,
+                cardsPerPlayer: 1,
+                playerNames: ['Alice', 'Bob', '', ''],
+            };
+
+            const params = encodeSessionToParams(session);
+            expect(params.get('n')).toBe('Alice,Bob');
+
+            const decoded = decodeSessionFromParams(params);
+            expect(decoded!.playerNames).toEqual(['Alice', 'Bob', '', '']);
+        });
+
+        it('should preserve names containing a comma', () => {
+            const session: SessionData = {
+                seed: 'test123',
+                drawnNumbers: [],
+                numberOfPlayers: 2,
+                cardsPerPlayer: 1,
+                playerNames: ['Müller, Anna', 'Bob'],
+            };
+
+            const params = encodeSessionToParams(session);
+            const decoded = decodeSessionFromParams(params);
+
+            expect(decoded!.playerNames).toEqual(['Müller, Anna', 'Bob']);
         });
     });
 
@@ -397,6 +435,46 @@ describe('session utilities', () => {
 
             // Compare cards
             expect(decodedCards).toEqual(originalCards);
+        });
+    });
+
+    describe('host token', () => {
+        beforeEach(() => {
+            window.sessionStorage.clear();
+        });
+
+        it('should generate a token of the expected length', () => {
+            expect(generateHostToken()).toHaveLength(HOST_TOKEN_LENGTH);
+        });
+
+        it('should generate alphanumeric tokens', () => {
+            expect(generateHostToken()).toMatch(/^[A-Za-z0-9]+$/);
+        });
+
+        it('should generate different tokens each time', () => {
+            const tokens = new Set(Array.from({ length: 20 }, () => generateHostToken()));
+            expect(tokens.size).toBe(20);
+        });
+
+        it('should round-trip a token through storage', () => {
+            const token = generateHostToken();
+            storeHostToken('seedA', token);
+
+            expect(getHostToken('seedA')).toBe(token);
+        });
+
+        it('should scope tokens per session seed', () => {
+            storeHostToken('seedA', generateHostToken());
+
+            expect(getHostToken('seedB')).toBeNull();
+        });
+
+        it('should never leak the token into a shareable URL', () => {
+            const token = generateHostToken();
+            storeHostToken('seedA', token);
+
+            const url = createShareableUrl({ seed: 'seedA', drawnNumbers: [1, 2] });
+            expect(url).not.toContain(token);
         });
     });
 });
