@@ -58,6 +58,7 @@ function renderDrawer(overrides: Partial<React.ComponentProps<typeof NumberDrawe
         setSessionData: jest.fn(),
         joinedFromUrl: false,
         sessionResolved: true,
+        initialHostToken: null,
         ...overrides,
     };
 
@@ -154,6 +155,25 @@ describe('NumberDrawer', () => {
             renderDrawer({ sessionData: SESSION, joinedFromUrl: false, generatedCards: [] });
 
             expect(screen.getByRole('button', { name: /Karten generieren/i })).toBeDisabled();
+        });
+
+        it('should demote to spectator when a shared URL resolves after mount', () => {
+            // Guards the transition, not the sub-render window: `isHost` is
+            // derived from the prop rather than copied into state, which closes
+            // that window by construction. Testing Library flushes effects
+            // before assertions, so a lagging implementation would still pass
+            // here - the derivation itself is what has to stay.
+            const { rerender } = renderDrawer({
+                sessionData: null,
+                joinedFromUrl: false,
+                sessionResolved: false,
+            });
+
+            rerender({ sessionData: SESSION, joinedFromUrl: true, sessionResolved: true });
+
+            expect(screen.getByRole('button', { name: /Zahl ziehen/i })).toBeDisabled();
+            expect(screen.getByRole('button', { name: /Neu starten/i })).toBeDisabled();
+            expect(screen.getByText(/Zuschauermodus/i)).toBeInTheDocument();
         });
 
         it('should keep draw and restart enabled for a host', () => {

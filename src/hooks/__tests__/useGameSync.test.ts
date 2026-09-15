@@ -72,16 +72,19 @@ function renderSync(overrides: Partial<Parameters<typeof useGameSync>[0]> = {}) 
         onHostRoleLost: jest.fn(),
     };
 
-    const utils = renderHook(() =>
-        useGameSync({
-            seed: null,
-            hostToken: null,
-            isHost: true,
-            enabled: true,
-            pollingInterval: 10,
-            ...callbacks,
-            ...overrides,
-        })
+    const utils = renderHook(
+        (props: Partial<Parameters<typeof useGameSync>[0]>) =>
+            useGameSync({
+                seed: null,
+                hostToken: null,
+                isHost: true,
+                enabled: true,
+                pollingInterval: 10,
+                ...callbacks,
+                ...overrides,
+                ...props,
+            }),
+        { initialProps: {} as Partial<Parameters<typeof useGameSync>[0]> }
     );
 
     return { ...utils, callbacks };
@@ -229,6 +232,47 @@ describe('useGameSync', () => {
             });
 
             expect(posts.at(-1)?.token).toBe(nextToken);
+        });
+
+        it('should rotate when the seed and token arrive after mount', async () => {
+            // The real load order: the hook mounts before the URL is read, then
+            // page.tsx supplies seed and token together. Mounting with them
+            // already present - as the other tests do - never exercises this.
+            const { rerender, callbacks } = renderSync({ seed: null, hostToken: null });
+
+            await new Promise(resolve => setTimeout(resolve, 20));
+            expect(rotations).toHaveLength(0);
+
+            rerender({ seed: 'seedA', hostToken: HOST_TOKEN, enabled: true });
+
+            await waitFor(() => expect(rotations).toHaveLength(1));
+            expect(rotations[0].token).toBe(HOST_TOKEN);
+            expect(callbacks.onTokenRotated).toHaveBeenCalled();
+        });
+
+        it('should still rotate when the token arrives a render after the seed', async () => {
+            // Defence in depth: even if a caller delivers them separately, the
+            // session must not go unclaimed.
+            const { rerender } = renderSync({ seed: null, hostToken: null });
+
+            rerender({ seed: 'seedA', hostToken: null, enabled: true });
+            await new Promise(resolve => setTimeout(resolve, 20));
+            expect(rotations).toHaveLength(0);
+
+            rerender({ seed: 'seedA', hostToken: HOST_TOKEN, enabled: true });
+
+            await waitFor(() => expect(rotations).toHaveLength(1));
+        });
+
+        it('should rotate only once', async () => {
+            const { rerender } = renderSync({ seed: 'seedA', hostToken: HOST_TOKEN });
+
+            await waitFor(() => expect(rotations).toHaveLength(1));
+
+            rerender({ seed: 'seedA', hostToken: rotations[0].body.rotateToken as string });
+            await new Promise(resolve => setTimeout(resolve, 30));
+
+            expect(rotations).toHaveLength(1);
         });
 
         it('should not rotate when there is no session yet', async () => {

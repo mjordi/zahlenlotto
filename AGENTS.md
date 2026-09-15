@@ -129,6 +129,14 @@ The app supports shareable URLs for game sessions:
 - **Host vs guest on load** is decided by whether `getHostToken(seed)` returns a
   token for that seed, not by the mere presence of `?s=` - otherwise a host
   returning to its own session would be demoted to a spectator.
+- `page.tsx` resolves the role and the stored token **in the same effect** and
+  passes both down, so the seed and the token reach `useGameSync` in one render.
+  A render apart and the hook would do its mount work with no token and skip the
+  ownership rotation entirely.
+- `NumberDrawer` **derives** `isHost` from `joinedFromUrl` rather than copying it
+  into state. Copied state lags a render behind the prop, which would leave a
+  guest holding live host controls for that render - enough for a keypress to
+  mint a new seed over the incoming share link.
 - The URL can only be read in an effect, so the first paint does not yet know
   the role. `sessionResolved` keeps draw, reset **and card generation**
   disabled until it does: a

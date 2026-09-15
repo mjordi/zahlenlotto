@@ -29,6 +29,11 @@ export default function Home() {
     // the incoming share link, stranding the guest or the returning host.
     const [sessionResolved, setSessionResolved] = useState(false);
 
+    // Read together with the role, so the seed and the token reach NumberDrawer
+    // in the same render. Arriving a render apart would let the sync hook run
+    // its mount work with no token and skip the ownership rotation entirely.
+    const [initialHostToken, setInitialHostToken] = useState<string | null>(null);
+
     // Check for session in URL on mount
     useEffect(() => {
         const urlSession = getSessionFromUrl();
@@ -38,7 +43,9 @@ export default function Home() {
             // A host token stored for this seed means this tab created the
             // session and is returning to it (a refresh), not joining someone
             // else's. Only a tab without the token is a guest.
-            setJoinedFromUrl(!getHostToken(urlSession.seed));
+            const storedToken = getHostToken(urlSession.seed);
+            setJoinedFromUrl(!storedToken);
+            setInitialHostToken(storedToken);
 
             // Restore drawn numbers from URL
             if (urlSession.drawnNumbers.length > 0) {
@@ -198,6 +205,7 @@ export default function Home() {
                         setSessionData={setSessionData}
                         joinedFromUrl={joinedFromUrl}
                         sessionResolved={sessionResolved}
+                        initialHostToken={initialHostToken}
                     />
                 </div>
             </div>

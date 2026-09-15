@@ -82,6 +82,9 @@ export function useGameSync({
     const lastCardConfigRef = useRef<string>(''); // Track card config changes
     const sessionSyncRef = useRef<SessionSync | null>(null);
     const hasHydratedRef = useRef(false);
+    // Tracked apart from hydration: the token can arrive after the seed, and
+    // ownership must still be claimed when it does.
+    const hasRotatedRef = useRef(false);
     // Set the moment a write is *queued*, not when it succeeds: the mount-time
     // read must not be applied on top of a draw that is already on its way.
     const hasLocalWriteRef = useRef(false);
@@ -157,11 +160,13 @@ export function useGameSync({
      */
     useEffect(() => {
         if (!seed || !enabled || !isHost) return;
-        if (hasHydratedRef.current) {
+
+        const needsRotation = !hasRotatedRef.current && !!hostToken;
+        const needsHydration = !hasHydratedRef.current;
+        if (!needsRotation && !needsHydration) {
             setIsHydrating(false);
             return;
         }
-        hasHydratedRef.current = true;
         setIsHydrating(true);
 
         let cancelled = false;
@@ -179,7 +184,8 @@ export function useGameSync({
                 // loaded last rotates the token and the other is locked out on
                 // its next write rather than both writing as host.
                 const currentToken = hostTokenRef.current;
-                if (currentToken) {
+                if (needsRotation && currentToken) {
+                    hasRotatedRef.current = true;
                     const nextToken = generateHostToken();
                     const rotation = await fetch(`/api/session/${seed}`, {
                         method: 'POST',
@@ -203,6 +209,9 @@ export function useGameSync({
                         onTokenRotatedRef.current(nextToken);
                     }
                 }
+
+                if (!needsHydration) return;
+                hasHydratedRef.current = true;
 
                 const response = await fetch(`/api/session/${seed}`, { signal: controller.signal });
                 if (!response.ok) return;
@@ -251,7 +260,7 @@ export function useGameSync({
             clearTimeout(timer);
             controller.abort();
         };
-    }, [seed, isHost, enabled, hydrateTimeout]);
+    }, [seed, isHost, enabled, hydrateTimeout, hostToken]);
 
     // Poll for updates (guests only)
     useEffect(() => {

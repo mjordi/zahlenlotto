@@ -32,6 +32,8 @@ interface NumberDrawerProps {
     joinedFromUrl: boolean;
     /** False until the URL has been inspected and the host/guest role is known. */
     sessionResolved: boolean;
+    /** Stored host token for a session being resumed, resolved alongside the role. */
+    initialHostToken: string | null;
 }
 
 export default function NumberDrawer({
@@ -47,6 +49,7 @@ export default function NumberDrawer({
     setSessionData,
     joinedFromUrl,
     sessionResolved,
+    initialHostToken,
 }: NumberDrawerProps) {
     const [isAnimating, setIsAnimating] = useState(false);
     const [justDrawn, setJustDrawn] = useState<number | null>(null);
@@ -69,33 +72,23 @@ export default function NumberDrawer({
     const [showAllDrawn, setShowAllDrawn] = useState(false);
     const [showPdfDrawer, setShowPdfDrawer] = useState(false);
 
-    // Track if we are the host (who started the session)
-    const [isHost, setIsHost] = useState(!joinedFromUrl);
+    // Only set once this tab decides its own role: true when it creates a
+    // session, false when another tab takes it over. Otherwise the role follows
+    // the prop *derived*, not copied into state - state would lag a render
+    // behind and leave a guest holding live host controls for that render.
+    const [hostOverride, setHostOverride] = useState<boolean | null>(null);
+    const isHost = hostOverride ?? !joinedFromUrl;
 
     // Secret that proves session ownership to the API. Hosts only - never shared.
-    const [hostToken, setHostToken] = useState<string | null>(null);
+    const [ownToken, setOwnToken] = useState<string | null>(null);
+
+    // Falls back to the token resolved with the role, so a resuming host holds
+    // it in the very render the seed arrives. A render later would be too late:
+    // the sync hook does its mount work once and would skip rotation.
+    const hostToken = ownToken ?? initialHostToken;
 
     // Set when another tab rotated the token out from under us
     const [hostTakenOver, setHostTakenOver] = useState(false);
-
-    // Sync isHost with joinedFromUrl prop (handles async URL detection)
-    useEffect(() => {
-        if (joinedFromUrl) {
-            setIsHost(false);
-        }
-    }, [joinedFromUrl]);
-
-    // A returning host keeps its token in sessionStorage. Adopt it as soon as
-    // the role is known so the sync hook can rotate it on mount, before any
-    // other tab holding the same copied token gets to write.
-    useEffect(() => {
-        if (!sessionResolved || !isHost || hostToken) return;
-        const seed = sessionData?.seed;
-        if (!seed) return;
-
-        const stored = getHostToken(seed);
-        if (stored) setHostToken(stored);
-    }, [sessionResolved, isHost, hostToken, sessionData]);
 
     // Generate cards from config (used by both host and when receiving sync)
     const generateCardsFromConfig = useCallback((
@@ -155,12 +148,12 @@ export default function NumberDrawer({
         onTokenRotated: useCallback((token: string) => {
             const seed = sessionData?.seed;
             if (seed) storeHostToken(seed, token);
-            setHostToken(token);
+            setOwnToken(token);
         }, [sessionData]),
         onHostRoleLost: useCallback(() => {
             // Another tab owns the session now; carry on as a spectator
-            setIsHost(false);
-            setHostToken(null);
+            setHostOverride(false);
+            setOwnToken(null);
             setHostTakenOver(true);
         }, []),
     });
@@ -177,7 +170,7 @@ export default function NumberDrawer({
 
         if (token !== hostToken) {
             storeHostToken(seed, token);
-            setHostToken(token);
+            setOwnToken(token);
         }
         claimSession(seed, token);
 
@@ -451,7 +444,7 @@ export default function NumberDrawer({
                 playerNames: trimmedNames,
             };
             setSessionData(newSession);
-            setIsHost(true); // Generating cards makes you the host
+            setHostOverride(true); // Generating cards makes you the host
 
             const cards = generateCardsFromConfig(seed, numberOfPlayers, cardsPerPlayer, trimmedNames);
             setGeneratedCards(cards);
