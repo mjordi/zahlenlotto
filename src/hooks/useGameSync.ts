@@ -85,6 +85,10 @@ export function useGameSync({
     // Tracked apart from hydration: the token can arrive after the seed, and
     // ownership must still be claimed when it does.
     const hasRotatedRef = useRef(false);
+    // Holds a replacement token whose rotation result we never saw (aborted or
+    // lost response). The server may well have accepted it, so a later 403 is
+    // retried with this before concluding another tab took over.
+    const pendingTokenRef = useRef<string | null>(null);
     // Set the moment a write is *queued*, not when it succeeds: the mount-time
     // read must not be applied on top of a draw that is already on its way.
     const hasLocalWriteRef = useRef(false);
@@ -126,6 +130,12 @@ export function useGameSync({
         seedRef.current = newSeed;
         hostTokenRef.current = newHostToken;
         isHostRef.current = true;
+        // A session minted here needs no takeover: no other tab can hold this
+        // token. Rotating anyway would race the initial claim - if the rotation
+        // landed first the session would still be unclaimed, the rotation would
+        // store nothing, and the late claim would register the *old* token,
+        // locking this tab out of the game it just started.
+        hasRotatedRef.current = true;
     }, []);
 
     // Initialize BroadcastChannel for same-browser sync
@@ -135,9 +145,19 @@ export function useGameSync({
         const sync = new SessionSync(
             seed,
             {
-                onNumberDrawn: (numbers, current) => onStateUpdateRef.current(numbers, current),
-                onReset: () => onResetRef.current(),
-                onSyncResponse: (numbers, current) => onStateUpdateRef.current(numbers, current),
+                // Only guests take state from a peer. An active host is the
+                // source of truth, and a tab that has just been rotated out
+                // still broadcasts before its write is refused - accepting that
+                // would let a demoted tab rewrite the real host's board.
+                onNumberDrawn: (numbers, current) => {
+                    if (!isHostRef.current) onStateUpdateRef.current(numbers, current);
+                },
+                onReset: () => {
+                    if (!isHostRef.current) onResetRef.current();
+                },
+                onSyncResponse: (numbers, current) => {
+                    if (!isHostRef.current) onStateUpdateRef.current(numbers, current);
+                },
             },
             isHost
         );
@@ -187,6 +207,10 @@ export function useGameSync({
                 if (needsRotation && currentToken) {
                     hasRotatedRef.current = true;
                     const nextToken = generateHostToken();
+                    // Remember it before sending: if the answer never arrives we
+                    // cannot tell whether the server took it, and losing it
+                    // would strand the only host on an obsolete credential.
+                    pendingTokenRef.current = nextToken;
                     const rotation = await fetch(`/api/session/${seed}`, {
                         method: 'POST',
                         signal: controller.signal,
@@ -205,6 +229,7 @@ export function useGameSync({
                         return;
                     }
                     if (rotation.ok) {
+                        pendingTokenRef.current = null;
                         hostTokenRef.current = nextToken;
                         onTokenRotatedRef.current(nextToken);
                     }
@@ -351,16 +376,33 @@ export function useGameSync({
         writeSeqRef.current = Math.max(Date.now(), writeSeqRef.current + 1);
         const clientSeq = writeSeqRef.current;
 
+        const attempt = (token: string) =>
+            fetch(`/api/session/${currentSeed}`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'x-host-token': token,
+                },
+                body: JSON.stringify({ ...body, clientSeq }),
+            });
+
         const send = async () => {
             try {
-                const response = await fetch(`/api/session/${currentSeed}`, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'x-host-token': currentToken,
-                    },
-                    body: JSON.stringify({ ...body, clientSeq }),
-                });
+                let response = await attempt(currentToken);
+
+                // A rotation whose answer we never saw may still have committed
+                // server-side. Before concluding another tab took over, retry
+                // once with that replacement credential.
+                if (response.status === 403 && pendingTokenRef.current) {
+                    const candidate = pendingTokenRef.current;
+                    pendingTokenRef.current = null;
+                    const retry = await attempt(candidate);
+                    if (retry.ok) {
+                        hostTokenRef.current = candidate;
+                        onTokenRotatedRef.current(candidate);
+                    }
+                    response = retry;
+                }
 
                 if (response.ok) {
                     const data = await response.json();

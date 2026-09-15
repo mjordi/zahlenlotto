@@ -18,6 +18,40 @@ interface PolledState {
 
 const HOST_TOKEN = 'host-token-for-tests-0123456789';
 
+/**
+ * jsdom ships no BroadcastChannel, so SessionSync silently skips the whole
+ * cross-tab path there. This in-memory stand-in delivers to every other open
+ * channel of the same name, which is the behaviour the hook relies on.
+ */
+class TestBroadcastChannel {
+    static open: TestBroadcastChannel[] = [];
+    onmessage: ((event: { data: unknown }) => void) | null = null;
+
+    constructor(readonly name: string) {
+        TestBroadcastChannel.open.push(this);
+    }
+
+    postMessage(data: unknown) {
+        for (const peer of TestBroadcastChannel.open) {
+            if (peer !== this && peer.name === this.name) {
+                peer.onmessage?.({ data });
+            }
+        }
+    }
+
+    close() {
+        TestBroadcastChannel.open = TestBroadcastChannel.open.filter(c => c !== this);
+    }
+}
+
+beforeAll(() => {
+    (globalThis as unknown as { BroadcastChannel: unknown }).BroadcastChannel = TestBroadcastChannel;
+});
+
+afterEach(() => {
+    TestBroadcastChannel.open = [];
+});
+
 let fetchMock: jest.Mock;
 
 /** Latest state the fake server would return from GET. */
@@ -275,6 +309,61 @@ describe('useGameSync', () => {
             expect(rotations).toHaveLength(1);
         });
 
+        it('should not rotate a session this tab just created', async () => {
+            // claimSession mints the token here, so no other tab can hold it.
+            // Rotating would race the initial claim and could lock the creator
+            // out of the game it just started.
+            const { result, rerender } = renderSync({ seed: null, hostToken: null });
+
+            act(() => {
+                result.current.claimSession('freshSeed', HOST_TOKEN);
+            });
+            rerender({ seed: 'freshSeed', hostToken: HOST_TOKEN, enabled: true });
+
+            await new Promise(resolve => setTimeout(resolve, 40));
+
+            expect(rotations).toHaveLength(0);
+        });
+
+        it('should retry a refused write with a rotation whose answer was lost', async () => {
+            // The rotation committed server-side but the response never arrived,
+            // so this tab still holds the old token. A 403 here is not a takeover.
+            let rotationToken: string | undefined;
+            fetchMock.mockImplementation(async (url: string, init?: RequestInit) => {
+                if (init?.method !== 'POST') {
+                    return { ok: true, status: 200, json: async () => serverState };
+                }
+                const headers = (init.headers ?? {}) as Record<string, string>;
+                const body = JSON.parse(init.body as string);
+                const token = headers['x-host-token'];
+
+                if (body.rotateToken !== undefined) {
+                    rotationToken = body.rotateToken;
+                    rotations.push({ seed: 'seedA', body, token: token ?? null });
+                    // Committed, but the client never learns the outcome
+                    throw new DOMException('Aborted', 'AbortError');
+                }
+
+                if (token !== rotationToken) {
+                    return { ok: false, status: 403, json: async () => ({ error: 'Not the session host' }) };
+                }
+                posts.push({ seed: 'seedA', body, token: token ?? null });
+                return { ok: true, status: 200, json: async () => ({ ok: true, lastUpdate: Date.now() }) };
+            });
+
+            const { result, callbacks } = renderSync({ seed: 'seedA', hostToken: HOST_TOKEN, isHost: true });
+            await waitFor(() => expect(rotations).toHaveLength(1));
+
+            await act(async () => {
+                await result.current.pushState([5], 5);
+            });
+
+            // Recovered rather than demoting the only host
+            expect(posts).toHaveLength(1);
+            expect(callbacks.onHostRoleLost).not.toHaveBeenCalled();
+            expect(callbacks.onTokenRotated).toHaveBeenCalledWith(rotationToken);
+        });
+
         it('should not rotate when there is no session yet', async () => {
             renderSync({ seed: null, hostToken: null });
 
@@ -326,6 +415,47 @@ describe('useGameSync', () => {
             expect(callbacks.onHostRoleLost).toHaveBeenCalled();
             // A takeover is not a sync outage - do not show the generic warning
             expect(result.current.syncUnavailable).toBe(false);
+        });
+    });
+
+    describe('broadcasts between tabs', () => {
+        it('should ignore a peer broadcast while acting as host', async () => {
+            const { callbacks } = renderSync({ seed: 'seedA', hostToken: HOST_TOKEN, isHost: true });
+            await waitFor(() => expect(rotations).toHaveLength(1));
+
+            // A tab that has just been rotated out still broadcasts before its
+            // write is refused; the real host must not take state from it.
+            const channel = new BroadcastChannel('zahlenlotto-seedA');
+            await act(async () => {
+                channel.postMessage({
+                    type: 'NUMBER_DRAWN',
+                    seed: 'seedA',
+                    drawnNumbers: [77],
+                    currentNumber: 77,
+                });
+                await new Promise(resolve => setTimeout(resolve, 30));
+            });
+            channel.close();
+
+            expect(callbacks.onStateUpdate).not.toHaveBeenCalledWith([77], 77);
+        });
+
+        it('should accept a peer broadcast as a guest', async () => {
+            const { callbacks } = renderSync({ seed: 'seedB', hostToken: null, isHost: false });
+
+            const channel = new BroadcastChannel('zahlenlotto-seedB');
+            await act(async () => {
+                channel.postMessage({
+                    type: 'NUMBER_DRAWN',
+                    seed: 'seedB',
+                    drawnNumbers: [12],
+                    currentNumber: 12,
+                });
+                await new Promise(resolve => setTimeout(resolve, 30));
+            });
+            channel.close();
+
+            expect(callbacks.onStateUpdate).toHaveBeenCalledWith([12], 12);
         });
     });
 

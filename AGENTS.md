@@ -198,6 +198,18 @@ The cross-device sync uses a polling-based approach with Vercel KV:
   guests never observe it.
 - Rotation is authenticated by the token in force: holding the share link is
   never enough to seize a session.
+- A session **this tab just created** is never rotated (`claimSession` marks it
+  done). Rotating would race the initial claim: if the rotation landed first the
+  session would still be unclaimed, nothing would be stored, and the late claim
+  would register the *old* token - locking the creator out of its own game.
+- A rotation whose answer never arrives (aborted by `hydrateTimeout`, or a lost
+  response) may still have committed. The replacement token is kept as a
+  candidate and a later `403` is retried with it once before concluding another
+  tab took over, so a flaky network cannot strand the only host.
+- **Only guests act on BroadcastChannel state.** An active host is the source of
+  truth, and a tab that has just been rotated out still broadcasts before its
+  write is refused; accepting that would let a demoted tab rewrite the real
+  host's board. The token stays the only write boundary.
 
 **useGameSync Hook** (`src/hooks/useGameSync.ts`):
 - Hosts push state updates to the server after each draw
