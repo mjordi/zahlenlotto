@@ -206,6 +206,16 @@ The cross-device sync uses a polling-based approach with Vercel KV:
   response) may still have committed. The replacement token is kept as a
   candidate and a later `403` is retried with it once before concluding another
   tab took over, so a flaky network cannot strand the only host.
+- Rotation and the mount read are **separate effects**. The read deliberately
+  does not depend on `hostToken`: publishing a rotated token updates that prop,
+  and a dependency on it would tear the read down mid-flight, abort the GET and
+  release the controls on an empty board - the very overwrite the read prevents.
+- Each queued write reads `hostTokenRef.current` when it **starts**, not when it
+  is queued, so a credential recovered by an earlier write in the chain is used
+  by the ones behind it instead of being refused.
+- Stepping down clears `lastUpdateRef`. The refused action is still on screen
+  locally, and without clearing it the first guest poll would skip the
+  authoritative state for being no newer than what the tab already had.
 - **Only guests act on BroadcastChannel state.** An active host is the source of
   truth, and a tab that has just been rotated out still broadcasts before its
   write is refused; accepting that would let a demoted tab rewrite the real

@@ -93,7 +93,10 @@ export function useGameSync({
     // read must not be applied on top of a draw that is already on its way.
     const hasLocalWriteRef = useRef(false);
     const [syncUnavailable, setSyncUnavailable] = useState(false);
-    const [isHydrating, setIsHydrating] = useState(isHost && enabled && !!seed);
+    const [isRotating, setIsRotating] = useState(false);
+    const [isReading, setIsReading] = useState(isHost && enabled && !!seed);
+    // Controls stay blocked while either mount phase is in flight
+    const isHydrating = isRotating || isReading;
 
     // Host writes are stamped with a strictly increasing sequence and chained,
     // so two overlapping pushes can never land out of order (see postState).
@@ -179,15 +182,79 @@ export function useGameSync({
      * it can never undo a draw the host just made.
      */
     useEffect(() => {
-        if (!seed || !enabled || !isHost) return;
+        if (!seed || !enabled || !isHost || hasRotatedRef.current || !hostToken) return;
+        hasRotatedRef.current = true;
+        setIsRotating(true);
 
-        const needsRotation = !hasRotatedRef.current && !!hostToken;
-        const needsHydration = !hasHydratedRef.current;
-        if (!needsRotation && !needsHydration) {
-            setIsHydrating(false);
+        let cancelled = false;
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), hydrateTimeout);
+
+        (async () => {
+            try {
+                const currentToken = hostTokenRef.current;
+                if (!currentToken) return;
+
+                const nextToken = generateHostToken();
+                // Remember it before sending: if the answer never arrives we
+                // cannot tell whether the server took it, and losing it would
+                // strand the only host on an obsolete credential.
+                pendingTokenRef.current = nextToken;
+
+                const rotation = await fetch(`/api/session/${seed}`, {
+                    method: 'POST',
+                    signal: controller.signal,
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'x-host-token': currentToken,
+                    },
+                    body: JSON.stringify({ rotateToken: nextToken }),
+                });
+
+                if (cancelled) return;
+
+                if (rotation.status === 403) {
+                    // Another tab already took the session over
+                    lastUpdateRef.current = 0;
+                    onHostRoleLostRef.current();
+                    return;
+                }
+                if (rotation.ok) {
+                    pendingTokenRef.current = null;
+                    hostTokenRef.current = nextToken;
+                    onTokenRotatedRef.current(nextToken);
+                }
+            } catch (error) {
+                console.error('Session rotate error:', error);
+            } finally {
+                clearTimeout(timer);
+                if (!cancelled) setIsRotating(false);
+            }
+        })();
+
+        return () => {
+            cancelled = true;
+            clearTimeout(timer);
+            controller.abort();
+        };
+    }, [seed, isHost, enabled, hostToken, hydrateTimeout]);
+
+    /**
+     * Load the stored state once (hosts only).
+     *
+     * Deliberately does not depend on `hostToken`: publishing a rotated token
+     * updates that prop, and a dependency on it would tear this effect down
+     * mid-read, abort the GET, and leave the host on an empty board with the
+     * controls released - the exact overwrite the read exists to prevent.
+     */
+    useEffect(() => {
+        if (!seed || !enabled || !isHost) return;
+        if (hasHydratedRef.current) {
+            setIsReading(false);
             return;
         }
-        setIsHydrating(true);
+        hasHydratedRef.current = true;
+        setIsReading(true);
 
         let cancelled = false;
 
@@ -199,45 +266,6 @@ export function useGameSync({
 
         (async () => {
             try {
-                // Take ownership first. Duplicating a tab copies sessionStorage,
-                // so the clone arrives holding the same token; whichever tab
-                // loaded last rotates the token and the other is locked out on
-                // its next write rather than both writing as host.
-                const currentToken = hostTokenRef.current;
-                if (needsRotation && currentToken) {
-                    hasRotatedRef.current = true;
-                    const nextToken = generateHostToken();
-                    // Remember it before sending: if the answer never arrives we
-                    // cannot tell whether the server took it, and losing it
-                    // would strand the only host on an obsolete credential.
-                    pendingTokenRef.current = nextToken;
-                    const rotation = await fetch(`/api/session/${seed}`, {
-                        method: 'POST',
-                        signal: controller.signal,
-                        headers: {
-                            'Content-Type': 'application/json',
-                            'x-host-token': currentToken,
-                        },
-                        body: JSON.stringify({ rotateToken: nextToken }),
-                    });
-
-                    if (cancelled) return;
-
-                    if (rotation.status === 403) {
-                        // Another tab already took the session over
-                        onHostRoleLostRef.current();
-                        return;
-                    }
-                    if (rotation.ok) {
-                        pendingTokenRef.current = null;
-                        hostTokenRef.current = nextToken;
-                        onTokenRotatedRef.current(nextToken);
-                    }
-                }
-
-                if (!needsHydration) return;
-                hasHydratedRef.current = true;
-
                 const response = await fetch(`/api/session/${seed}`, { signal: controller.signal });
                 if (!response.ok) return;
 
@@ -276,7 +304,7 @@ export function useGameSync({
             } finally {
                 clearTimeout(timer);
                 // Always release the host, however this ended
-                if (!cancelled) setIsHydrating(false);
+                if (!cancelled) setIsReading(false);
             }
         })();
 
@@ -285,7 +313,7 @@ export function useGameSync({
             clearTimeout(timer);
             controller.abort();
         };
-    }, [seed, isHost, enabled, hydrateTimeout, hostToken]);
+    }, [seed, isHost, enabled, hydrateTimeout]);
 
     // Poll for updates (guests only)
     useEffect(() => {
@@ -364,9 +392,8 @@ export function useGameSync({
      */
     const postState = useCallback(async (body: Record<string, unknown>) => {
         const currentSeed = seedRef.current;
-        const currentToken = hostTokenRef.current;
 
-        if (!currentSeed || !currentToken || !isHostRef.current) return;
+        if (!currentSeed || !hostTokenRef.current || !isHostRef.current) return;
 
         // Claim the session locally before anything is awaited, so the
         // mount-time read cannot be applied over a draw already in flight
@@ -388,7 +415,13 @@ export function useGameSync({
 
         const send = async () => {
             try {
-                let response = await attempt(currentToken);
+                // Read at execution time, not when queued: an earlier write in
+                // this chain may have recovered a rotated credential, and the
+                // stale one would be refused and demote the host for nothing.
+                const token = hostTokenRef.current;
+                if (!token) return;
+
+                let response = await attempt(token);
 
                 // A rotation whose answer we never saw may still have committed
                 // server-side. Before concluding another tab took over, retry
@@ -414,6 +447,11 @@ export function useGameSync({
                 // 403 means another tab rotated the token and owns the session
                 // now; step down instead of showing a generic sync warning.
                 if (response.status === 403) {
+                    // The local board still shows the action the server just
+                    // refused. Clear the version marker so the first guest poll
+                    // applies the authoritative state instead of skipping it
+                    // for being no newer than what we already had.
+                    lastUpdateRef.current = 0;
                     onHostRoleLostRef.current();
                     return;
                 }

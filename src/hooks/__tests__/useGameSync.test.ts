@@ -364,6 +364,120 @@ describe('useGameSync', () => {
             expect(callbacks.onTokenRotated).toHaveBeenCalledWith(rotationToken);
         });
 
+        it('should finish reading the session even though rotation publishes a new token', async () => {
+            // Publishing the rotated token changes the hostToken prop. If the
+            // read depended on it, that update would tear the effect down and
+            // abort the GET, leaving the host on an empty board with controls
+            // released - and the next draw would overwrite the real history.
+            serverState = { drawnNumbers: [3, 14], currentNumber: 14, lastUpdate: 900 };
+
+            let releaseRead: (() => void) | undefined;
+            const original = fetchMock.getMockImplementation()!;
+            fetchMock.mockImplementation(async (url: string, init?: RequestInit) => {
+                if (init?.method !== 'POST') {
+                    await new Promise<void>(resolve => { releaseRead = resolve; });
+                }
+                return original(url, init);
+            });
+
+            const { rerender, callbacks } = renderSync({ seed: 'seedA', hostToken: HOST_TOKEN, isHost: true });
+
+            await waitFor(() => expect(rotations).toHaveLength(1));
+            const rotated = rotations[0].body.rotateToken as string;
+
+            // React delivers the published token back as a prop
+            rerender({ seed: 'seedA', hostToken: rotated, enabled: true });
+            await new Promise(resolve => setTimeout(resolve, 10));
+
+            releaseRead?.();
+
+            await waitFor(() => {
+                expect(callbacks.onStateUpdate).toHaveBeenCalledWith([3, 14], 14);
+            });
+        });
+
+        it('should use a recovered token for writes already queued behind it', async () => {
+            // Two actions queued before recovery: the first adopts the pending
+            // replacement, the second must not still send the obsolete one.
+            let rotationToken: string | undefined;
+            fetchMock.mockImplementation(async (url: string, init?: RequestInit) => {
+                if (init?.method !== 'POST') {
+                    return { ok: true, status: 200, json: async () => serverState };
+                }
+                const headers = (init.headers ?? {}) as Record<string, string>;
+                const body = JSON.parse(init.body as string);
+                const token = headers['x-host-token'];
+
+                if (body.rotateToken !== undefined) {
+                    rotationToken = body.rotateToken;
+                    rotations.push({ seed: 'seedA', body, token: token ?? null });
+                    throw new DOMException('Aborted', 'AbortError');
+                }
+                if (token !== rotationToken) {
+                    return { ok: false, status: 403, json: async () => ({ error: 'Not the session host' }) };
+                }
+                posts.push({ seed: 'seedA', body, token: token ?? null });
+                return { ok: true, status: 200, json: async () => ({ ok: true, lastUpdate: Date.now() }) };
+            });
+
+            const { result, callbacks } = renderSync({ seed: 'seedA', hostToken: HOST_TOKEN, isHost: true });
+            await waitFor(() => expect(rotations).toHaveLength(1));
+
+            await act(async () => {
+                const first = result.current.pushState([1], 1);
+                const second = result.current.pushState([1, 2], 2);
+                await Promise.all([first, second]);
+            });
+
+            expect(posts).toHaveLength(2);
+            expect(callbacks.onHostRoleLost).not.toHaveBeenCalled();
+        });
+
+        it('should re-read server state after a write demotes this tab', async () => {
+            // Rotation succeeds and the read sets the version marker, so the
+            // later 403 is the only thing demoting us. Without clearing the
+            // marker the first guest poll skips the authoritative state for
+            // being no newer, and the refused draw stays on screen.
+            serverState = { drawnNumbers: [8], currentNumber: 8, lastUpdate: 500 };
+
+            let rotated = false;
+            fetchMock.mockImplementation(async (_url: string, init?: RequestInit) => {
+                if (init?.method !== 'POST') {
+                    return { ok: true, status: 200, json: async () => serverState };
+                }
+                const body = JSON.parse(init.body as string);
+                if (body.rotateToken !== undefined) {
+                    rotated = true;
+                    rotations.push({ seed: 'seedA', body, token: null });
+                    return { ok: true, status: 200, json: async () => ({ ok: true, rotated: true }) };
+                }
+                return { ok: false, status: 403, json: async () => ({ error: 'Not the session host' }) };
+            });
+
+            const { result, rerender, callbacks } = renderSync({
+                seed: 'seedA',
+                hostToken: HOST_TOKEN,
+                isHost: true,
+            });
+
+            // Rotation and the mount read both complete before we write
+            await waitFor(() => expect(rotated).toBe(true));
+            await waitFor(() => expect(callbacks.onStateUpdate).toHaveBeenCalledWith([8], 8));
+            callbacks.onStateUpdate.mockClear();
+
+            await act(async () => {
+                await result.current.pushState([99], 99);
+            });
+            expect(callbacks.onHostRoleLost).toHaveBeenCalled();
+
+            rerender({ seed: 'seedA', hostToken: null, isHost: false, enabled: true });
+
+            // The authoritative state has to land again, same timestamp and all
+            await waitFor(() => {
+                expect(callbacks.onStateUpdate).toHaveBeenCalledWith([8], 8);
+            });
+        });
+
         it('should not rotate when there is no session yet', async () => {
             renderSync({ seed: null, hostToken: null });
 
