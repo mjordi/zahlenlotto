@@ -216,6 +216,15 @@ The cross-device sync uses a polling-based approach with Vercel KV:
 - Stepping down clears `lastUpdateRef`. The refused action is still on screen
   locally, and without clearing it the first guest poll would skip the
   authoritative state for being no newer than what the tab already had.
+- The URL-loading effect in `page.tsx` is **mount only**. Its first run strips
+  the address down to the seed, so a re-run (a language change used to trigger
+  one) would decode a session with no card configuration and overwrite the
+  richer one in state - and the next share link would silently drop `p`, `c`
+  and `n`.
+- Writes **broadcast only once the server has accepted them**. Announcing first
+  let a tab that had already been rotated out plant a number on every guest,
+  where it sat until the real host wrote again. The trade is one round trip of
+  latency for same-browser tabs, which poll anyway.
 - **Only guests act on BroadcastChannel state.** An active host is the source of
   truth, and a tab that has just been rotated out still broadcasts before its
   write is refused; accepting that would let a demoted tab rewrite the real

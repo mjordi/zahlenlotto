@@ -554,6 +554,53 @@ describe('useGameSync', () => {
             expect(callbacks.onStateUpdate).not.toHaveBeenCalledWith([77], 77);
         });
 
+        it('should not broadcast a write the server refused', async () => {
+            // A tab already rotated out must not plant its number on the guests;
+            // they would keep showing it until the real host writes again.
+            fetchMock.mockImplementation(async (_url: string, init?: RequestInit) => {
+                if (init?.method === 'POST') {
+                    const body = JSON.parse(init.body as string);
+                    if (body.rotateToken !== undefined) {
+                        rotations.push({ seed: 'seedA', body, token: null });
+                        return { ok: true, status: 200, json: async () => ({ ok: true }) };
+                    }
+                    return { ok: false, status: 403, json: async () => ({ error: 'Not the session host' }) };
+                }
+                return { ok: true, status: 200, json: async () => serverState };
+            });
+
+            const { result } = renderSync({ seed: 'seedA', hostToken: HOST_TOKEN, isHost: true });
+            await waitFor(() => expect(rotations).toHaveLength(1));
+
+            const listener = new BroadcastChannel('zahlenlotto-seedA');
+            const received: unknown[] = [];
+            listener.onmessage = (event: { data: unknown }) => received.push(event.data);
+
+            await act(async () => {
+                await result.current.pushState([42], 42);
+                await result.current.resetState();
+            });
+            listener.close();
+
+            expect(received).toHaveLength(0);
+        });
+
+        it('should broadcast a write the server accepted', async () => {
+            const { result } = renderSync({ seed: 'seedA', hostToken: HOST_TOKEN, isHost: true });
+            await waitFor(() => expect(rotations).toHaveLength(1));
+
+            const listener = new BroadcastChannel('zahlenlotto-seedA');
+            const received: { type: string }[] = [];
+            listener.onmessage = (event: { data: unknown }) => received.push(event.data as { type: string });
+
+            await act(async () => {
+                await result.current.pushState([42], 42);
+            });
+            listener.close();
+
+            expect(received.map(m => m.type)).toEqual(['NUMBER_DRAWN']);
+        });
+
         it('should accept a peer broadcast as a guest', async () => {
             const { callbacks } = renderSync({ seed: 'seedB', hostToken: null, isHost: false });
 

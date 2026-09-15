@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { SUPPORTED_LANGUAGES } from '@/utils/translations';
 import { Card } from '@/utils/lotto';
@@ -34,6 +34,9 @@ export default function Home() {
     // its mount work with no token and skip the ownership rotation entirely.
     const [initialHostToken, setInitialHostToken] = useState<string | null>(null);
 
+    // Read once at mount so a later language change cannot re-enter the effect
+    const playerLabelRef = useRef(t.playerLabel);
+
     // Check for session in URL on mount
     useEffect(() => {
         const urlSession = getSessionFromUrl();
@@ -62,7 +65,7 @@ export default function Home() {
                         cards.push({
                             id: cardId,
                             grid: generateLottoCardWithSeed(urlSession.seed, cardId),
-                            playerName: urlSession.playerNames?.[playerIdx]?.trim() || `${t.playerLabel} ${playerIdx + 1}`,
+                            playerName: urlSession.playerNames?.[playerIdx]?.trim() || `${playerLabelRef.current} ${playerIdx + 1}`,
                         });
                         cardId++;
                     }
@@ -78,7 +81,11 @@ export default function Home() {
 
         // Always resolve, session or not, so controls are never stuck disabled
         setSessionResolved(true);
-    }, [t.playerLabel]);
+        // Mount only. The first run strips the URL down to the seed, so a re-run
+        // would decode a session with no card configuration and overwrite the
+        // richer one held in state - and the next share link would silently drop
+        // `p`, `c` and `n`.
+    }, []);
 
     const languages = SUPPORTED_LANGUAGES.map(lang => ({
         ...lang,

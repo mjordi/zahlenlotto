@@ -390,7 +390,7 @@ export function useGameSync({
      * chain prevents the overlap; the sequence lets the server refuse anything
      * that still slips through.
      */
-    const postState = useCallback(async (body: Record<string, unknown>) => {
+    const postState = useCallback(async (body: Record<string, unknown>, announce?: () => void) => {
         const currentSeed = seedRef.current;
 
         if (!currentSeed || !hostTokenRef.current || !isHostRef.current) return;
@@ -441,6 +441,11 @@ export function useGameSync({
                     const data = await response.json();
                     lastUpdateRef.current = data.lastUpdate;
                     setSyncUnavailable(false);
+                    // Only now: a write refused with 403 must never reach the
+                    // other tabs. Announcing first would let a tab that has
+                    // already been rotated out plant a number on every guest,
+                    // where it would sit until the real host writes again.
+                    announce?.();
                     return;
                 }
 
@@ -482,9 +487,6 @@ export function useGameSync({
         currentNumber: number | null,
         cardConfig?: CardConfig
     ) => {
-        // Broadcast to same-browser tabs first - it is instant and never fails
-        sessionSyncRef.current?.broadcastNumberDrawn(drawnNumbers, currentNumber);
-
         const body: Record<string, unknown> = { drawnNumbers, currentNumber };
         if (cardConfig) {
             body.numberOfPlayers = cardConfig.numberOfPlayers;
@@ -492,7 +494,9 @@ export function useGameSync({
             body.playerNames = cardConfig.playerNames;
         }
 
-        await postState(body);
+        await postState(body, () =>
+            sessionSyncRef.current?.broadcastNumberDrawn(drawnNumbers, currentNumber)
+        );
     }, [postState]);
 
     // Push card configuration to server (host only) - called when generating cards
@@ -516,8 +520,10 @@ export function useGameSync({
      * generated cards stay intact.
      */
     const resetState = useCallback(async () => {
-        sessionSyncRef.current?.broadcastReset();
-        await postState({ drawnNumbers: [], currentNumber: null });
+        await postState(
+            { drawnNumbers: [], currentNumber: null },
+            () => sessionSyncRef.current?.broadcastReset()
+        );
     }, [postState]);
 
     return {
