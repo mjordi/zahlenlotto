@@ -11,6 +11,7 @@ Zahlenlotto is a Next.js-based lottery card generator that creates traditional 9
 - **Language**: TypeScript
 - **Styling**: Tailwind CSS
 - **PDF Generation**: jsPDF
+- **Real-time Sync**: Vercel KV (with in-memory fallback)
 - **Testing**: Jest + React Testing Library
 - **Deployment**: Vercel
 
@@ -57,9 +58,13 @@ When changing functionality, update these files:
 zahlenlotto/
 ├── src/
 │   ├── app/              # Next.js App Router pages
+│   │   └── api/          # API routes
+│   │       └── session/  # Cross-device sync API
 │   ├── components/       # React components
 │   │   └── __tests__/    # Component tests
 │   ├── contexts/         # React contexts (e.g., LanguageContext)
+│   ├── hooks/            # Custom React hooks
+│   │   └── useGameSync.ts # Cross-device sync hook
 │   └── utils/            # Utility functions
 │       └── __tests__/    # Utility tests
 ├── public/               # Static assets
@@ -92,6 +97,196 @@ Cards follow traditional Tombola/Bingo format:
   - Column 8: 80-90
 - Numbers sorted within each column
 - All numbers unique per card
+
+**Seeded Card Generation:**
+- Cards can be generated with a seed for reproducibility
+- Use `generateLottoCardWithSeed(seed, cardIndex)` from `session.ts`
+- Same seed + cardIndex = same card (deterministic)
+- This enables shareable game sessions via URL
+
+### 6.1 Shareable Game Sessions
+
+The app supports shareable URLs for game sessions:
+- **Session data** is encoded in URL parameters:
+  - `s`: Session seed (8-char alphanumeric) - required
+  - `d`: Drawn numbers (comma-separated, optional)
+  - `p`: Number of players (1-20, optional)
+  - `c`: Cards per player (1-10, optional)
+  - `n`: Player names (comma-separated, optional)
+- **Draw-only sessions**: Can share just the draw without cards (only `s` and `d` params)
+- **Example URLs**:
+  - With cards: `https://example.com/?s=abc12345&d=1,42,88&p=2&c=3&n=Alice,Bob`
+  - Draw-only: `https://example.com/?s=abc12345&d=1,42,88`
+- **Player names are positional**: empty names are kept in place (`Alice,,Charlie`)
+  so later names do not shift onto the wrong player, and each name is
+  percent-encoded so a name containing a comma survives. Only *trailing* empty
+  names are dropped; decoding pads them back.
+- **After loading**, the app keeps only `?s=<seed>` in the URL, for host and
+  guest alike (`setSeedInUrl()`). Without it a reload cannot tell which session
+  the tab belonged to: a guest would become a local host, and a host would start
+  a fresh game and strand its guests on an abandoned session. The volatile state
+  comes from the sync API anyway.
+- **Host vs guest on load** is decided by whether `getHostToken(seed)` returns a
+  token for that seed, not by the mere presence of `?s=` - otherwise a host
+  returning to its own session would be demoted to a spectator.
+- `page.tsx` resolves the role and the stored token **in the same effect** and
+  passes both down, so the seed and the token reach `useGameSync` in one render.
+  A render apart and the hook would do its mount work with no token and skip the
+  ownership rotation entirely.
+- `NumberDrawer` **derives** `isHost` from `joinedFromUrl` rather than copying it
+  into state. Copied state lags a render behind the prop, which would leave a
+  guest holding live host controls for that render - enough for a keypress to
+  mint a new seed over the incoming share link.
+- The URL can only be read in an effect, so the first paint does not yet know
+  the role. `sessionResolved` keeps draw, reset **and card generation**
+  disabled until it does: a
+  draw in that window would mint a new seed and `setSeedInUrl()` would overwrite
+  the incoming share link, leaving the guest unable to rejoin even by reloading.
+- **Cross-device sync**: Polling with Vercel KV for state sync across different devices
+- **Same-browser sync**: Uses BroadcastChannel API for syncing across browser tabs
+- **Session utilities** in `src/utils/session.ts`:
+  - `generateSessionSeed()`: Generate random 8-char seed
+  - `generateLottoCardWithSeed(seed, index)`: Deterministic card generation
+  - `encodeSessionToParams(session)`: Encode to URLSearchParams
+  - `decodeSessionFromParams(params)`: Decode from URLSearchParams
+  - `createShareableUrl(session)`: Create full shareable URL
+  - `SessionSync` class: BroadcastChannel wrapper for real-time sync
+
+### 6.2 Cross-Device Sync Architecture
+
+The cross-device sync uses a polling-based approach with Vercel KV:
+
+**API Route** (`src/app/api/session/[seed]/route.ts`):
+- `GET /api/session/[seed]`: Poll for current game state. Public (anyone with the
+  share link), and never returns the host token.
+- `POST /api/session/[seed]`: Update game state. Requires the `x-host-token`
+  header. Card configuration is **merged**, so a plain draw update keeps the
+  stored cards.
+
+**Write atomicity** (`commitState()`):
+- The sequence check and the write happen together. The in-memory store does
+  read-check-write in one synchronous block, which Node's single thread makes
+  indivisible.
+- On Vercel KV they are still two round trips, so a window remains. A single
+  host tab cannot hit it, because it chains its writes. Two host tabs could:
+  duplicating a tab, or opening a link from it, copies `sessionStorage` in
+  Chrome and Firefox, so the clone arrives holding the same host token. **Token
+  rotation on load** (below) is what stops them writing concurrently - not any
+  property of `sessionStorage`, which is not per-tab in the way it first
+  appears.
+- **Known gap**: closing it completely needs a Lua compare-and-set via
+  `kv.eval()`, which cannot be verified without a live KV instance. Do not ship
+  one untested - a wrong script breaks the only production write path, which is
+  far worse than the race it closes.
+
+**Host authorization**:
+- The host generates a secret token (`generateHostToken()`) alongside the seed
+  and keeps it in `sessionStorage` - it is **never** part of a shareable URL.
+- The first `POST` for a seed claims the session with that token; later writes
+  must present the same token or get a `403`.
+- Client-side guest restrictions are UX only - the token is the actual boundary.
+
+**Token rotation on load** (`rotateHostToken()`):
+- On mount a host re-claims its session with a freshly minted token, presenting
+  the current one as proof. The newest tab to load owns the session.
+- This is what makes concurrent hosts impossible. Duplicating a tab copies
+  `sessionStorage`, so the clone holds the same token; it rotates on load and
+  the original is refused with `403` on its next write, stepping down to
+  spectator (`onHostRoleLost`) with the `hostTakenOver` notice rather than a
+  generic sync warning.
+- A rotation carries no state and deliberately leaves `lastUpdate` alone, so
+  guests never observe it.
+- Rotation is authenticated by the token in force: holding the share link is
+  never enough to seize a session.
+- A session **this tab just created** is never rotated (`claimSession` marks it
+  done). Rotating would race the initial claim: if the rotation landed first the
+  session would still be unclaimed, nothing would be stored, and the late claim
+  would register the *old* token - locking the creator out of its own game.
+- A rotation whose answer never arrives (aborted by `hydrateTimeout`, or a lost
+  response) may still have committed. The replacement token is kept as a
+  candidate and a later `403` is retried with it once before concluding another
+  tab took over, so a flaky network cannot strand the only host.
+- Rotation and the mount read are **separate effects**. The read deliberately
+  does not depend on `hostToken`: publishing a rotated token updates that prop,
+  and a dependency on it would tear the read down mid-flight, abort the GET and
+  release the controls on an empty board - the very overwrite the read prevents.
+- Each queued write reads `hostTokenRef.current` when it **starts**, not when it
+  is queued, so a credential recovered by an earlier write in the chain is used
+  by the ones behind it instead of being refused.
+- Stepping down clears `lastUpdateRef`. The refused action is still on screen
+  locally, and without clearing it the first guest poll would skip the
+  authoritative state for being no newer than what the tab already had.
+- The URL-loading effect in `page.tsx` is **mount only**. Its first run strips
+  the address down to the seed, so a re-run (a language change used to trigger
+  one) would decode a session with no card configuration and overwrite the
+  richer one in state - and the next share link would silently drop `p`, `c`
+  and `n`.
+- Writes **broadcast only once the server has accepted them**. Announcing first
+  let a tab that had already been rotated out plant a number on every guest,
+  where it sat until the real host wrote again. The trade is one round trip of
+  latency for same-browser tabs, which poll anyway.
+- **Only guests act on BroadcastChannel state.** An active host is the source of
+  truth, and a tab that has just been rotated out still broadcasts before its
+  write is refused; accepting that would let a demoted tab rewrite the real
+  host's board. The token stays the only write boundary.
+
+**useGameSync Hook** (`src/hooks/useGameSync.ts`):
+- Hosts push state updates to the server after each draw
+- Guests poll the server every 2 seconds for state changes
+- Hosts do **not** poll, but do read the stored state **once on mount**, so a
+  refreshed host resumes the session instead of overwriting it with an empty
+  board. Drawing is blocked (`isHydrating`) until that read finishes: a draw
+  computed from the pre-hydration board would overwrite the very history the
+  refresh is resuming. Card generation is gated the same way - generating
+  pre-hydration would push the empty board and wipe the stored draw history.
+  The read is also discarded once a write has been
+  *queued* - not merely completed - for the same reason. It is bounded by
+  `hydrateTimeout` (5s) and always releases the host: an unreachable API has to
+  degrade to local play, never lock the host out of their own game.
+- The mount read honours a recorded reset: an empty state with `lastUpdate > 0`
+  invokes `onReset`, so a host reopening an older full share URL does not
+  resurrect the numbers that link still carries.
+- Any push response other than `2xx` or `409`, and any failed or thrown guest
+  poll, sets `syncUnavailable`; the next success clears it. `409` is
+  the expected "a newer write already won" answer and means sync is healthy;
+  everything else means guests have stopped receiving this host's draws, and
+  the host is told rather than left playing on unaware.
+- Host writes are **chained and sequenced**: each carries a strictly increasing
+  `clientSeq` (clock-seeded so it keeps rising across a reload) and waits for
+  the previous write. Two overlapping pushes - a slow draw and then a reset -
+  would otherwise land out of order and the stale draw would resurrect numbers
+  the host had cleared. The server rejects an overtaken write with `409`.
+- Integrates BroadcastChannel for same-browser tab sync
+- Session identity (seed + token) lives in refs and is registered through
+  `claimSession()`, so a session created inside an event handler can be pushed
+  to immediately, before React re-renders
+- A **reset is stored as an empty, freshly timestamped state**, not a delete: a
+  deleted key reads back as `lastUpdate: 0`, which guests can never distinguish
+  from "no state yet", so the reset would never propagate
+- `lastUpdate: 0` means the server holds no state - guests keep whatever they
+  restored from the share URL instead of clearing it
+
+**State Structure**:
+```typescript
+interface GameState {
+    drawnNumbers: number[];
+    currentNumber: number | null;
+    lastUpdate: number; // Timestamp for change detection
+    numberOfPlayers?: number;
+    cardsPerPlayer?: number;
+    playerNames?: string[];
+    clientSeq?: number;  // Rejects host writes that a newer one overtook
+    hostToken?: string;  // Server-only, stripped from every response
+}
+```
+
+**Environment Variables** (for Vercel KV in production):
+- `KV_REST_API_URL`: Vercel KV REST API URL
+- `KV_REST_API_TOKEN`: Vercel KV authentication token
+
+The in-memory fallback is **development only**. It is per-process, so it cannot
+work across serverless instances; in production a missing KV configuration
+returns `503` and the UI shows a sync warning rather than silently desyncing.
 
 ### 7. Git Workflow
 
