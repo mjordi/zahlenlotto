@@ -1,10 +1,11 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { SUPPORTED_LANGUAGES } from '@/utils/translations';
 import { Card } from '@/utils/lotto';
 import ThemeToggle from '@/components/ThemeToggle';
+import { SessionData, getSessionFromUrl, generateLottoCardWithSeed, getHostToken, setSeedInUrl } from '@/utils/session';
 
 import NumberDrawer from '@/components/NumberDrawer';
 
@@ -17,6 +18,74 @@ export default function Home() {
     const [currentNumber, setCurrentNumber] = useState<number | null>(null);
     const [soundEnabled, setSoundEnabled] = useState(true);
     const [generatedCards, setGeneratedCards] = useState<Card[]>([]);
+
+    // Session state for shareable URLs
+    const [sessionData, setSessionData] = useState<SessionData | null>(null);
+    const [joinedFromUrl, setJoinedFromUrl] = useState(false);
+
+    // The URL can only be read in an effect, so the first paint does not yet
+    // know whether this tab is a host or a guest. Until it does, host controls
+    // stay disabled: a draw in that window would mint a new seed and overwrite
+    // the incoming share link, stranding the guest or the returning host.
+    const [sessionResolved, setSessionResolved] = useState(false);
+
+    // Read together with the role, so the seed and the token reach NumberDrawer
+    // in the same render. Arriving a render apart would let the sync hook run
+    // its mount work with no token and skip the ownership rotation entirely.
+    const [initialHostToken, setInitialHostToken] = useState<string | null>(null);
+
+    // Read once at mount so a later language change cannot re-enter the effect
+    const playerLabelRef = useRef(t.playerLabel);
+
+    // Check for session in URL on mount
+    useEffect(() => {
+        const urlSession = getSessionFromUrl();
+        if (urlSession) {
+            setSessionData(urlSession);
+
+            // A host token stored for this seed means this tab created the
+            // session and is returning to it (a refresh), not joining someone
+            // else's. Only a tab without the token is a guest.
+            const storedToken = getHostToken(urlSession.seed);
+            setJoinedFromUrl(!storedToken);
+            setInitialHostToken(storedToken);
+
+            // Restore drawn numbers from URL
+            if (urlSession.drawnNumbers.length > 0) {
+                setDrawnNumbers(urlSession.drawnNumbers);
+                setCurrentNumber(urlSession.drawnNumbers[urlSession.drawnNumbers.length - 1]);
+            }
+
+            // Generate cards from the session seed (only if card config is present)
+            if (urlSession.numberOfPlayers && urlSession.cardsPerPlayer) {
+                const cards: Card[] = [];
+                let cardId = 1;
+                for (let playerIdx = 0; playerIdx < urlSession.numberOfPlayers; playerIdx++) {
+                    for (let cardNum = 0; cardNum < urlSession.cardsPerPlayer; cardNum++) {
+                        cards.push({
+                            id: cardId,
+                            grid: generateLottoCardWithSeed(urlSession.seed, cardId),
+                            playerName: urlSession.playerNames?.[playerIdx]?.trim() || `${playerLabelRef.current} ${playerIdx + 1}`,
+                        });
+                        cardId++;
+                    }
+                }
+                setGeneratedCards(cards);
+            }
+
+            // Keep only the seed in the URL: it keeps a reload in the same session
+            // (instead of starting a new local game), while the volatile state -
+            // drawn numbers and card config - comes from the sync API.
+            setSeedInUrl(urlSession.seed);
+        }
+
+        // Always resolve, session or not, so controls are never stuck disabled
+        setSessionResolved(true);
+        // Mount only. The first run strips the URL down to the seed, so a re-run
+        // would decode a session with no card configuration and overwrite the
+        // richer one held in state - and the next share link would silently drop
+        // `p`, `c` and `n`.
+    }, []);
 
     const languages = SUPPORTED_LANGUAGES.map(lang => ({
         ...lang,
@@ -139,6 +208,11 @@ export default function Home() {
                         setSoundEnabled={setSoundEnabled}
                         generatedCards={generatedCards}
                         setGeneratedCards={setGeneratedCards}
+                        sessionData={sessionData}
+                        setSessionData={setSessionData}
+                        joinedFromUrl={joinedFromUrl}
+                        sessionResolved={sessionResolved}
+                        initialHostToken={initialHostToken}
                     />
                 </div>
             </div>

@@ -2,10 +2,21 @@
 
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { useLanguage } from '@/contexts/LanguageContext';
-import { TOTAL_NUMBERS, Card, getNewlyCompletedRows, generateLottoCard } from '@/utils/lotto';
+import { TOTAL_NUMBERS, Card, getNewlyCompletedRows } from '@/utils/lotto';
 import LottoCard from './LottoCard';
 import confetti from 'canvas-confetti';
 import { generatePdf } from '@/utils/pdfGenerator';
+import {
+    SessionData,
+    generateSessionSeed,
+    generateLottoCardWithSeed,
+    createShareableUrl,
+    generateHostToken,
+    storeHostToken,
+    getHostToken,
+    setSeedInUrl,
+} from '@/utils/session';
+import { useGameSync, type CardConfig } from '@/hooks/useGameSync';
 
 interface NumberDrawerProps {
     drawnNumbers: number[];
@@ -16,6 +27,13 @@ interface NumberDrawerProps {
     setSoundEnabled: (enabled: boolean | ((prev: boolean) => boolean)) => void;
     generatedCards: Card[];
     setGeneratedCards: (cards: Card[]) => void;
+    sessionData: SessionData | null;
+    setSessionData: (data: SessionData | null) => void;
+    joinedFromUrl: boolean;
+    /** False until the URL has been inspected and the host/guest role is known. */
+    sessionResolved: boolean;
+    /** Stored host token for a session being resumed, resolved alongside the role. */
+    initialHostToken: string | null;
 }
 
 export default function NumberDrawer({
@@ -26,7 +44,12 @@ export default function NumberDrawer({
     soundEnabled,
     setSoundEnabled,
     generatedCards,
-    setGeneratedCards
+    setGeneratedCards,
+    sessionData,
+    setSessionData,
+    joinedFromUrl,
+    sessionResolved,
+    initialHostToken,
 }: NumberDrawerProps) {
     const [isAnimating, setIsAnimating] = useState(false);
     const [justDrawn, setJustDrawn] = useState<number | null>(null);
@@ -34,6 +57,7 @@ export default function NumberDrawer({
     const audioCtxRef = useRef<AudioContext | null>(null);
     const { t } = useLanguage();
     const previousDrawnRef = useRef<number[]>([]);
+    const hasBaselinedRowsRef = useRef(false);
 
     // Card generation state
     const [numberOfPlayers, setNumberOfPlayers] = useState(2);
@@ -44,8 +68,118 @@ export default function NumberDrawer({
     const [isExporting, setIsExporting] = useState(false);
     const [celebratingPlayers, setCelebratingPlayers] = useState<string[]>([]);
     const [newlyCompletedRowsByCard, setNewlyCompletedRowsByCard] = useState<Map<number, number[]>>(new Map());
+    const [linkCopied, setLinkCopied] = useState(false);
     const [showAllDrawn, setShowAllDrawn] = useState(false);
     const [showPdfDrawer, setShowPdfDrawer] = useState(false);
+
+    // Only set once this tab decides its own role: true when it creates a
+    // session, false when another tab takes it over. Otherwise the role follows
+    // the prop *derived*, not copied into state - state would lag a render
+    // behind and leave a guest holding live host controls for that render.
+    const [hostOverride, setHostOverride] = useState<boolean | null>(null);
+    const isHost = hostOverride ?? !joinedFromUrl;
+
+    // Secret that proves session ownership to the API. Hosts only - never shared.
+    const [ownToken, setOwnToken] = useState<string | null>(null);
+
+    // Falls back to the token resolved with the role, so a resuming host holds
+    // it in the very render the seed arrives. A render later would be too late:
+    // the sync hook does its mount work once and would skip rotation.
+    const hostToken = ownToken ?? initialHostToken;
+
+    // Set when another tab rotated the token out from under us
+    const [hostTakenOver, setHostTakenOver] = useState(false);
+
+    // Generate cards from config (used by both host and when receiving sync)
+    const generateCardsFromConfig = useCallback((
+        seed: string,
+        numPlayers: number,
+        numCardsPerPlayer: number,
+        names: string[]
+    ) => {
+        const cards: Card[] = [];
+        let cardId = 1;
+        for (let playerIdx = 0; playerIdx < numPlayers; playerIdx++) {
+            for (let cardNum = 0; cardNum < numCardsPerPlayer; cardNum++) {
+                cards.push({
+                    id: cardId,
+                    grid: generateLottoCardWithSeed(seed, cardId),
+                    playerName: names[playerIdx]?.trim() || `${t.playerLabel} ${playerIdx + 1}`,
+                });
+                cardId++;
+            }
+        }
+        return cards;
+    }, [t.playerLabel]);
+
+    // Cross-device sync using the API + BroadcastChannel
+    const { claimSession, pushState, pushCardConfig, resetState, syncUnavailable, isHydrating } = useGameSync({
+        seed: sessionData?.seed || null,
+        hostToken,
+        isHost,
+        enabled: !!sessionData?.seed,
+        pollingInterval: 2000,
+        onStateUpdate: useCallback((numbers: number[], current: number | null) => {
+            setDrawnNumbers(numbers);
+            setCurrentNumber(current);
+        }, [setDrawnNumbers, setCurrentNumber]),
+        onCardConfigUpdate: useCallback((config: CardConfig) => {
+            // Applies both to a guest receiving the host's cards and to a host
+            // resuming after a refresh. Having no cards yet is what makes this
+            // safe - it can never clobber cards already on screen.
+            const seed = sessionData?.seed;
+            if (seed && generatedCards.length === 0) {
+                const cards = generateCardsFromConfig(
+                    seed,
+                    config.numberOfPlayers,
+                    config.cardsPerPlayer,
+                    config.playerNames
+                );
+                setGeneratedCards(cards);
+                setNumberOfPlayers(config.numberOfPlayers);
+                setCardsPerPlayer(config.cardsPerPlayer);
+                setPlayerNames(config.playerNames);
+            }
+        }, [sessionData, generatedCards.length, generateCardsFromConfig, setGeneratedCards]),
+        onReset: useCallback(() => {
+            setDrawnNumbers([]);
+            setCurrentNumber(null);
+        }, [setDrawnNumbers, setCurrentNumber]),
+        onTokenRotated: useCallback((token: string) => {
+            const seed = sessionData?.seed;
+            if (seed) storeHostToken(seed, token);
+            setOwnToken(token);
+        }, [sessionData]),
+        onHostRoleLost: useCallback(() => {
+            // Another tab owns the session now; carry on as a spectator
+            setHostOverride(false);
+            setOwnToken(null);
+            setHostTakenOver(true);
+        }, []),
+    });
+
+    /**
+     * Makes sure we hold a seed and host token before pushing to the server.
+     * Registers both with the sync hook immediately, because a push can happen
+     * before React re-renders with the newly created session.
+     */
+    const ensureHostSession = useCallback(() => {
+        const existingSeed = sessionData?.seed;
+        const seed = existingSeed ?? generateSessionSeed();
+        const token = hostToken ?? getHostToken(seed) ?? generateHostToken();
+
+        if (token !== hostToken) {
+            storeHostToken(seed, token);
+            setOwnToken(token);
+        }
+        claimSession(seed, token);
+
+        // The seed has to be in the URL for a refresh to resume this session
+        // rather than start a new local game and strand the guests.
+        setSeedInUrl(seed);
+
+        return { seed, isNew: !existingSeed };
+    }, [sessionData, hostToken, claimSession]);
 
     // Audio Context initialisieren
     const initAudio = useCallback(() => {
@@ -160,8 +294,18 @@ export default function NumberDrawer({
         previousDrawnRef.current = newDrawnNumbers;
     }, [generatedCards, playCelebrationSound, triggerConfetti]);
 
-    // Zahl ziehen
+    // Zahl ziehen (only host can draw)
     const drawNumber = useCallback(() => {
+        // Guests cannot draw numbers
+        if (!isHost) return;
+
+        // Wait for the mount-time read: drawing off the pre-hydration board
+        // would overwrite the history this session is being resumed from.
+        // Also wait for the URL role check - before it lands this tab still
+        // looks like a fresh host and a draw would mint a seed over the
+        // incoming share link.
+        if (isHydrating || !sessionResolved) return;
+
         if (drawnNumbers.length >= TOTAL_NUMBERS || isAnimating) return;
 
         const availableNumbers = Array.from(
@@ -170,6 +314,12 @@ export default function NumberDrawer({
         ).filter(n => !drawnNumbers.includes(n));
 
         if (availableNumbers.length === 0) return;
+
+        // Claim the session (creating one on the first draw) before pushing
+        const { seed, isNew } = ensureHostSession();
+        if (isNew) {
+            setSessionData({ seed, drawnNumbers: [] });
+        }
 
         initAudio();
         setIsAnimating(true);
@@ -182,19 +332,40 @@ export default function NumberDrawer({
             setJustDrawn(randomNumber);
             setIsAnimating(false);
 
+            // Push state to server for cross-device sync (also broadcasts to same-browser tabs)
+            pushState(newDrawnNumbers, randomNumber);
+
             // Sound abspielen
             playSound(523.25 + (randomNumber * 5), 0.2);
-
-            // Check for row completion
-            checkRowCompletion(newDrawnNumbers);
 
             // Just-drawn Animation entfernen
             setTimeout(() => setJustDrawn(null), 500);
         }, 300);
-    }, [drawnNumbers, isAnimating, initAudio, playSound, setCurrentNumber, setDrawnNumbers, checkRowCompletion]);
+    }, [drawnNumbers, isAnimating, initAudio, playSound, setCurrentNumber, setDrawnNumbers, setSessionData, pushState, isHost, ensureHostSession, isHydrating, sessionResolved]);
 
-    // Reset mit Bestätigung
+    /**
+     * Row completion runs off the drawn numbers themselves, so guests receiving
+     * numbers through sync get the same highlighting, confetti and celebration.
+     * The first run only records a baseline: numbers drawn before we joined (or
+     * before the cards existed) must not trigger a celebration on arrival.
+     */
+    useEffect(() => {
+        if (generatedCards.length === 0) return;
+
+        if (!hasBaselinedRowsRef.current) {
+            hasBaselinedRowsRef.current = true;
+            previousDrawnRef.current = drawnNumbers;
+            return;
+        }
+
+        checkRowCompletion(drawnNumbers);
+    }, [drawnNumbers, generatedCards, checkRowCompletion]);
+
+    // Reset mit Bestätigung (only host can reset)
     const reset = useCallback(() => {
+        // Guests cannot reset the game
+        if (!isHost || isHydrating || !sessionResolved) return;
+
         if (drawnNumbers.length > 0) {
             if (!confirm(t.confirmRestart)) {
                 return;
@@ -207,9 +378,13 @@ export default function NumberDrawer({
         setShowCelebration(false);
         setNewlyCompletedRowsByCard(new Map());
         previousDrawnRef.current = [];
-    }, [drawnNumbers.length, t.confirmRestart, setDrawnNumbers, setCurrentNumber]);
 
-    // Tastatursteuerung
+        // Reset state on server (also broadcasts to same-browser tabs)
+        ensureHostSession();
+        resetState();
+    }, [drawnNumbers.length, t.confirmRestart, setDrawnNumbers, setCurrentNumber, resetState, isHost, ensureHostSession, isHydrating, sessionResolved]);
+
+    // Tastatursteuerung (draw/reset only work for host)
     useEffect(() => {
         const handleKeyDown = (e: KeyboardEvent) => {
             // Don't trigger shortcuts if user is typing in an input field
@@ -220,10 +395,10 @@ export default function NumberDrawer({
 
             if (e.code === 'Space' || e.code === 'Enter') {
                 e.preventDefault();
-                drawNumber();
+                if (isHost) drawNumber();
             } else if (e.code === 'KeyR') {
                 e.preventDefault();
-                reset();
+                if (isHost) reset();
             } else if (e.code === 'KeyM') {
                 e.preventDefault();
                 setSoundEnabled(prev => !prev);
@@ -232,7 +407,7 @@ export default function NumberDrawer({
 
         window.addEventListener('keydown', handleKeyDown);
         return () => window.removeEventListener('keydown', handleKeyDown);
-    }, [drawNumber, reset, setSoundEnabled]);
+    }, [drawNumber, reset, setSoundEnabled, isHost]);
 
     // Update player names when number of players changes
     useEffect(() => {
@@ -248,25 +423,41 @@ export default function NumberDrawer({
     const isNumberDrawn = (num: number) => drawnNumbers.includes(num);
     const remainingNumbers = TOTAL_NUMBERS - drawnNumbers.length;
 
-    // Generate cards function
+    // Generate cards function with seeded randomness for shareable URLs
     const generateCards = useCallback(() => {
+        // Same gate as drawing: generating before the resume read lands would
+        // push the empty pre-hydration board and wipe the stored draw history
+        // for every guest.
+        if (!isHost || isHydrating || !sessionResolved) return;
+
         setIsGenerating(true);
         setTimeout(() => {
-            const cards: Card[] = [];
-            let cardId = 1;
-            for (let playerIdx = 0; playerIdx < numberOfPlayers; playerIdx++) {
-                for (let cardNum = 0; cardNum < cardsPerPlayer; cardNum++) {
-                    cards.push({
-                        id: cardId++,
-                        grid: generateLottoCard(),
-                        playerName: playerNames[playerIdx]?.trim() || `${t.playerLabel} ${playerIdx + 1}`,
-                    });
-                }
-            }
+            // Claim the session first (reusing the seed of a draw-only session),
+            // so the card config push below targets the right session.
+            const { seed } = ensureHostSession();
+            const trimmedNames = playerNames.slice(0, numberOfPlayers);
+            const newSession: SessionData = {
+                seed,
+                drawnNumbers,
+                numberOfPlayers,
+                cardsPerPlayer,
+                playerNames: trimmedNames,
+            };
+            setSessionData(newSession);
+            setHostOverride(true); // Generating cards makes you the host
+
+            const cards = generateCardsFromConfig(seed, numberOfPlayers, cardsPerPlayer, trimmedNames);
             setGeneratedCards(cards);
             setIsGenerating(false);
+
+            // Push card configuration to server for guests to receive
+            pushCardConfig(
+                { numberOfPlayers, cardsPerPlayer, playerNames: trimmedNames },
+                drawnNumbers,
+                currentNumber
+            );
         }, 100);
-    }, [numberOfPlayers, cardsPerPlayer, playerNames, t.playerLabel, setGeneratedCards]);
+    }, [numberOfPlayers, cardsPerPlayer, playerNames, setGeneratedCards, setSessionData, drawnNumbers, currentNumber, generateCardsFromConfig, pushCardConfig, ensureHostSession, isHost, isHydrating, sessionResolved]);
 
     // Export to PDF function
     const exportToPDF = useCallback(() => {
@@ -280,6 +471,34 @@ export default function NumberDrawer({
             setIsExporting(false);
         }, 10);
     }, [generatedCards, cardsPerPage, t]);
+
+    // Copy share link to clipboard
+    const copyShareLink = useCallback(async () => {
+        if (!sessionData) return;
+
+        // Include current drawn numbers in the shareable URL
+        const sessionWithCurrentState: SessionData = {
+            ...sessionData,
+            drawnNumbers,
+        };
+
+        const url = createShareableUrl(sessionWithCurrentState);
+        try {
+            await navigator.clipboard.writeText(url);
+            setLinkCopied(true);
+            setTimeout(() => setLinkCopied(false), 2000);
+        } catch {
+            // Fallback for older browsers
+            const textArea = document.createElement('textarea');
+            textArea.value = url;
+            document.body.appendChild(textArea);
+            textArea.select();
+            document.execCommand('copy');
+            document.body.removeChild(textArea);
+            setLinkCopied(true);
+            setTimeout(() => setLinkCopied(false), 2000);
+        }
+    }, [sessionData, drawnNumbers]);
 
     return (
         <div className="w-full max-w-6xl mx-auto space-y-6 relative">
@@ -312,7 +531,8 @@ export default function NumberDrawer({
                         ? (
                             <span className="flex flex-col items-center gap-1">
                                 <span>{t.noNumberDrawn}</span>
-                                <span className="text-xs opacity-70">{t.emptyStateHint}</span>
+                                {/* Guests can neither press Space nor click to draw */}
+                                {isHost && <span className="text-xs opacity-70">{t.emptyStateHint}</span>}
                             </span>
                         )
                         : drawnNumbers.length === TOTAL_NUMBERS
@@ -321,27 +541,92 @@ export default function NumberDrawer({
                     }
                 </div>
 
+                {/* Sync failure - surfaced so a misconfigured deployment is not silent */}
+                {syncUnavailable && sessionData && (
+                    <div
+                        className="mb-4 inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-red-500/20 text-red-300 border border-red-500/30"
+                        role="status"
+                    >
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                            <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
+                            <line x1="12" y1="9" x2="12" y2="13"></line>
+                            <line x1="12" y1="17" x2="12.01" y2="17"></line>
+                        </svg>
+                        <span className="text-sm font-medium">{t.syncUnavailable}</span>
+                    </div>
+                )}
+
+                {/* Another tab took the session over */}
+                {hostTakenOver && (
+                    <div
+                        className="mb-4 inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-amber-500/20 text-amber-300 border border-amber-500/30"
+                        role="status"
+                    >
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                            <rect x="2" y="7" width="20" height="14" rx="2"></rect>
+                            <polyline points="16 3 12 7 8 3"></polyline>
+                        </svg>
+                        <span className="text-sm font-medium">{t.hostTakenOver}</span>
+                    </div>
+                )}
+
+                {/* Spectator Mode Indicator */}
+                {!isHost && sessionData && (
+                    <div className="mb-4 inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                            <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                            <circle cx="12" cy="12" r="3"></circle>
+                        </svg>
+                        <span className="text-sm font-medium">{t.spectatorMode}</span>
+                    </div>
+                )}
+
                 {/* Buttons */}
                 <div className="flex gap-4 justify-center flex-wrap mt-8">
                     <button
                         onClick={drawNumber}
-                        disabled={drawnNumbers.length >= TOTAL_NUMBERS || isAnimating}
+                        disabled={drawnNumbers.length >= TOTAL_NUMBERS || isAnimating || !isHost || isHydrating || !sessionResolved}
                         className="btn-primary px-8 py-4 text-lg disabled:opacity-50 disabled:cursor-not-allowed"
+                        title={!isHost ? t.hostOnly : undefined}
                     >
                         {t.drawNumber}
                     </button>
                     <button
                         onClick={reset}
-                        className="btn-danger px-8 py-4 text-lg"
+                        disabled={!isHost || isHydrating || !sessionResolved}
+                        className="btn-danger px-8 py-4 text-lg disabled:opacity-50 disabled:cursor-not-allowed"
+                        title={!isHost ? t.hostOnly : undefined}
                     >
                         {t.restart}
                     </button>
+                    {sessionData && isHost && (
+                        <button
+                            onClick={copyShareLink}
+                            className="px-8 py-4 bg-blue-700 hover:bg-blue-600 text-white font-semibold rounded-xl transition-all duration-300 shadow-lg shadow-blue-500/20 hover:shadow-blue-500/40 active:scale-95 flex items-center gap-2"
+                            title={t.shareGameDescription}
+                        >
+                            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                                <path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"></path>
+                                <polyline points="16 6 12 2 8 6"></polyline>
+                                <line x1="12" y1="2" x2="12" y2="15"></line>
+                            </svg>
+                            {linkCopied ? t.linkCopied : t.shareGame}
+                        </button>
+                    )}
                 </div>
 
-                {/* Tastatur-Hinweis & Sound */}
+                {/* Tastatur-Hinweis & Sound (only show draw/reset for host) */}
                 <div className="flex items-center justify-center gap-4 text-xs mt-6 pt-4" style={{ borderTop: `1px solid var(--glass-border)` }}>
                     <div className="leading-loose" style={{ color: 'var(--text-muted)' }}>
-                        {t.keyboardHint} <kbd className="px-1.5 py-0.5 rounded border font-sans inline-block my-1" style={{ background: 'var(--btn-secondary-bg)', borderColor: 'var(--glass-border)', color: 'var(--text-secondary)' }}>{t.keySpace}</kbd> {t.keyDraw} | <kbd className="px-1.5 py-0.5 rounded border font-sans inline-block my-1" style={{ background: 'var(--btn-secondary-bg)', borderColor: 'var(--glass-border)', color: 'var(--text-secondary)' }}>{t.keyEnter}</kbd> {t.keyDraw} | <kbd className="px-1.5 py-0.5 rounded border font-sans inline-block my-1" style={{ background: 'var(--btn-secondary-bg)', borderColor: 'var(--glass-border)', color: 'var(--text-secondary)' }}>{t.keyR}</kbd> {t.keyReset} | <kbd className="px-1.5 py-0.5 rounded border font-sans inline-block my-1" style={{ background: 'var(--btn-secondary-bg)', borderColor: 'var(--glass-border)', color: 'var(--text-secondary)' }}>M</kbd> {t.muteToggle}
+                        {isHost ? (
+                            <>
+                                {t.keyboardHint} <kbd className="px-1.5 py-0.5 rounded border font-sans inline-block my-1" style={{ background: 'var(--btn-secondary-bg)', borderColor: 'var(--glass-border)', color: 'var(--text-secondary)' }}>{t.keySpace}</kbd> {t.keyDraw} | <kbd className="px-1.5 py-0.5 rounded border font-sans inline-block my-1" style={{ background: 'var(--btn-secondary-bg)', borderColor: 'var(--glass-border)', color: 'var(--text-secondary)' }}>{t.keyEnter}</kbd> {t.keyDraw} | <kbd className="px-1.5 py-0.5 rounded border font-sans inline-block my-1" style={{ background: 'var(--btn-secondary-bg)', borderColor: 'var(--glass-border)', color: 'var(--text-secondary)' }}>{t.keyR}</kbd> {t.keyReset} | <kbd className="px-1.5 py-0.5 rounded border font-sans inline-block my-1" style={{ background: 'var(--btn-secondary-bg)', borderColor: 'var(--glass-border)', color: 'var(--text-secondary)' }}>M</kbd> {t.muteToggle}
+                            </>
+                        ) : (
+                            <>
+                                {t.keyboardHint} <kbd className="px-1.5 py-0.5 rounded border font-sans inline-block my-1" style={{ background: 'var(--btn-secondary-bg)', borderColor: 'var(--glass-border)', color: 'var(--text-secondary)' }}>M</kbd> {t.muteToggle}
+                            </>
+                        )}
                     </div>
                 </div>
             </div>
@@ -436,7 +721,31 @@ export default function NumberDrawer({
                                     </svg>
                                     {t.exportPdf}
                                 </button>
+                                {sessionData && isHost && (
+                                    <button
+                                        onClick={copyShareLink}
+                                        className="px-4 py-1 bg-blue-700 hover:bg-blue-600 text-white text-sm font-semibold rounded-lg transition-all duration-300 shadow-lg shadow-blue-500/20 hover:shadow-blue-500/40 active:scale-95 flex items-center gap-2"
+                                        title={t.shareGameDescription}
+                                    >
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                                            <path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"></path>
+                                            <polyline points="16 6 12 2 8 6"></polyline>
+                                            <line x1="12" y1="2" x2="12" y2="15"></line>
+                                        </svg>
+                                        {linkCopied ? t.linkCopied : t.shareGame}
+                                    </button>
+                                )}
                             </div>
+
+                            {/* Joined from URL notification */}
+                            {joinedFromUrl && (
+                                <div
+                                    className="mb-4 text-center text-sm py-2 px-4 rounded-lg"
+                                    style={{ backgroundColor: 'var(--btn-secondary-bg)', color: 'var(--text-secondary)' }}
+                                >
+                                    {t.joinedSession}
+                                </div>
+                            )}
 
                             {/* PDF Export Drawer */}
                             {showPdfDrawer && (
@@ -484,7 +793,24 @@ export default function NumberDrawer({
                                 ))}
                             </div>
                         </>
+                    ) : !isHost && sessionData ? (
+                        // Guest waiting for cards
+                        <>
+                            <h2 className="text-center text-2xl font-bold mb-6 bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-amber-400">
+                                {t.playingCards}
+                            </h2>
+                            <div className="flex flex-col items-center justify-center py-12">
+                                <div className="animate-pulse text-center">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="mx-auto mb-4" style={{ color: 'var(--text-muted)' }} aria-hidden="true">
+                                        <circle cx="12" cy="12" r="10"></circle>
+                                        <polyline points="12 6 12 12 16 14"></polyline>
+                                    </svg>
+                                    <p style={{ color: 'var(--text-muted)' }}>{t.waitingForCards}</p>
+                                </div>
+                            </div>
+                        </>
                     ) : (
+                        // Host can generate cards
                         <>
                             <h2 className="text-center font-display text-2xl font-bold mb-6 bg-clip-text text-transparent bg-gradient-to-r from-amber-400 to-orange-400">
                                 {t.tabGenerateCards}
@@ -547,7 +873,7 @@ export default function NumberDrawer({
                                     </div>
                                     <button
                                         onClick={generateCards}
-                                        disabled={isGenerating}
+                                        disabled={isGenerating || isHydrating || !sessionResolved}
                                         className="btn-primary w-full disabled:opacity-50 disabled:cursor-not-allowed"
                                         aria-label={isGenerating ? t.generating : t.generateCards}
                                     >
